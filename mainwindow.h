@@ -51,6 +51,8 @@ private slots:
 
     void onRecordingStarted();
     void onRecordingStopped(); 
+    void on_cameraCheckbox_stateChanged(int checked);
+    void on_lidarCheckbox_stateChanged(int checked);
 private:
     std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
                                                   const QString& key); 
@@ -71,6 +73,6 @@ private:
     std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
     QTimer* rosTimer_;
     std::unique_ptr<RosbagRecorder> recorder_;
-    QStringList recordTopics_;
+    QSet<QString> recordTopics_;
 };
 #endif // MAINWINDOW_H

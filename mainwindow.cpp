@@ -54,6 +54,8 @@ MainWindow::MainWindow(QWidget *parent)
     diag_monitor_ = std::make_unique<DiagnosticsMonitor>(nh, this);
     connect(diag_monitor_.get(), &DiagnosticsMonitor::statusChanged, this, &MainWindow::onDiagStatus);
 
+    connect(ui->cameraCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_cameraCheckbox_stateChanged);
+    connect(ui->lidarCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_lidarCheckbox_stateChanged);
     recorder_ = std::make_unique<RosbagRecorder>(this);
     connect(ui->startRecordingButton, &QPushButton::clicked, this, [this] {
         if (recorder_->getIsRecording()) {
@@ -316,19 +318,19 @@ void MainWindow::on_cameraCheckbox_stateChanged(int checked)
     }
 }
 
-void MainWindow::on_lidarCheckbox_stateChanged(int arg1)
+void MainWindow::on_lidarCheckbox_stateChanged(int checked)
 {
-    if (arg1 == 0) {
+    if (checked == 0) {
         recordTopics_.remove("/livox/lidar");
-    } else if (arg1 == 2) {
+    } else if (checked == 2) {
         recordTopics_ << "/livox/lidar";
     }
 }
 
 void MainWindow::onRecordingStarted() {
-    ui->recordStatus.setText("Recording...");
+    ui->recordStatus->setText("Recording...");
 }
 
 void MainWindow::onRecordingStopped() {
-    ui->recordStatus.setText("OFF");
+    ui->recordStatus->setText("OFF");
 }

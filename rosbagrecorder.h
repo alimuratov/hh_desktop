@@ -17,7 +17,7 @@ public:
     bool getIsRecording() { return isRecording; }
 
 public slots:
-    void startRecording(const QString &bagName, const QStringList &topics);
+    void startRecording(const QString &bagName, const QSet<QString> &topics);
     void stopRecording();
 
 signals:

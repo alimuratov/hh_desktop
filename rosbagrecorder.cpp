@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QMessageBox>
 #include <QThread>
+#include <QDir>
 
 #include <errno.h>
 #include <signal.h>
@@ -23,7 +24,7 @@ RosbagRecorder::~RosbagRecorder()
 
 
 void RosbagRecorder::startRecording(const QString &bagName,
-                                    const QStringList &topics)
+                                    const QSet<QString> &topics)
 {
     if (rosbagProc_) {
         qWarning() << "rosbag recorder already running";
@@ -32,11 +33,16 @@ void RosbagRecorder::startRecording(const QString &bagName,
 
     rosbagProc_ = std::make_unique<QProcess>(this);
     rosbagProc_->setProcessChannelMode(QProcess::MergedChannels);
+    rosbagProc_->setWorkingDirectory(QDir::homePath() + "/rosbags");
+    qDebug() << "Directory set to:" << rosbagProc_->workingDirectory();
+
+    QStringList topicList = topics.values();
 
     const QString program("/usr/bin/setsid");
     QString cmd = QStringLiteral("exec rosbag record -O %1 --lz4 --tcpnodelay %2")
-                       .arg(bagName, topics.join(' '));
+                       .arg(bagName, topicList.join(' '));
     const QStringList args{"/bin/bash", "-c", cmd};
+ 
 
     connect(rosbagProc_.get(), &QProcess::readyReadStandardOutput,
             this, &RosbagRecorder::onReadyReadStandardOutput);
