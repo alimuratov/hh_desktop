@@ -14,10 +14,17 @@
 #include <csignal>
 #include <unordered_map>
 #include <QString>
+#include <QtGlobal> 
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
+
+// Every translation unit that includes mainwindow.h needs the QString hash functor's definition, so we place it here
+// One-definition-rule is still not broken because a class/struct definition in a header is allowed to appear in multiple TUs as long as it is identical
+struct QStringHash {
+    std::size_t operator()(const QString &s) const noexcept { return qHash(s); } 
+};
 
 class MainWindow : public QMainWindow
 {
@@ -46,6 +53,6 @@ private:
     void stopLidar(); 
 
     Ui::MainWindow *ui;
-    std::unordered_map<QString, std::unique_ptr<QProcess>> drivers_; 
+    std::unordered_map<QString, std::unique_ptr<QProcess>, QStringHash> drivers_; 
 };
 #endif // MAINWINDOW_H
