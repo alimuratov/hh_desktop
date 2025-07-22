@@ -44,9 +44,9 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="stopRecordingButton">
+       <widget class="QPushButton" name="stopDriversButton">
         <property name="text">
-         <string>Stop Recording</string>
+         <string>Stop Driverrs</string>
         </property>
        </widget>
       </item>
@@ -87,7 +87,7 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QLabel" name="label_3">
+       <widget class="QLabel" name="driverStatus">
         <property name="text">
          <string>Initializing ...</string>
         </property>

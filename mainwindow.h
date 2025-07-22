@@ -20,6 +20,7 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
     void startDrivers();
+    void stopDrivers();
     void readDriverOutput();
     void pollDrivers();
     void driverCrashed(); 
