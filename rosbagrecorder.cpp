@@ -1,29 +1,51 @@
-#include "rosbag_recorder.h"
+#include "rosbagrecorder.h"
+
 #include <QDateTime>
+#include <QDebug>
+#include <QMessageBox>
+#include <QThread>
 
-RosbagRecorder::RosbagRecorder(QObject *parent) : QObject(parent), m_rosbagProcess(nullptr) {}
+#include <errno.h>
+#include <signal.h>
+#include <unistd.h>
 
-void RosbagRecorder::startRecording(const QString& bagName, const QStringList &topics)
+RosbagRecorder::RosbagRecorder(QObject *parent)
+    : QObject(parent)
 {
-    rosbagProc = std::make_unique<QProcess>(this);
-    rosbagProc->setProcessChannelMode(QProcess::MergedChannels);
+}
+
+RosbagRecorder::~RosbagRecorder() = default;
+
+void RosbagRecorder::startRecording(const QString &bagName,
+                                    const QStringList &topics)
+{
+    if (rosbagProc_) {
+        qWarning() << "rosbag recorder already running";
+        return;
+    }
+
+    rosbagProc_ = std::make_unique<QProcess>(this);
+    rosbagProc_->setProcessChannelMode(QProcess::MergedChannels);
 
     const QString program("/usr/bin/setsid");
-    const QStringList args {"/bin/bash", "-c", QStringLiteral("exec %1").arg(scriptPath)};
-    
-    connect(rosbagProc.get(), &QProcess::finished, this, &RosbagRecorder::onProcessFinished);
-    QStringList arguments;
-    arguments << "record" << "-O" << << "--lz4" << "--tcpnodelay" << bagName;
-    arguments.append(topics);
+    QString cmd = QStringLiteral("exec rosbag record -O %1 --lz4 --tcpnodelay %2")
+                       .arg(bagName, topics.join(' '));
+    const QStringList args{"/bin/bash", "-c", cmd};
 
-    connect(rosbagProc.get(), &QProcess::started, this, [this, p = proc.get()]{
+    connect(rosbagProc_.get(), &QProcess::readyReadStandardOutput,
+            this, &RosbagRecorder::onReadyReadStandardOutput);
+    connect(rosbagProc_.get(),
+            qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
+            this, &RosbagRecorder::onProcessFinished);
+    connect(rosbagProc_.get(), &QProcess::started, this, [p = rosbagProc_.get()] {
         qDebug() << "rosbag record PID=" << p->processId();
     });
 
-    if (!proc->waitForStarted()) {
-        QMessageBox::critical(this, tr("Failed to start"),
-                              tr("%1 driver could not be launched").arg(key)); 
-        return;
+    rosbagProc_->start(program, args);
+    if (!rosbagProc_->waitForStarted()) {
+        QMessageBox::critical(nullptr, tr("Failed to start"),
+                              tr("rosbag record could not be launched"));
+        rosbagProc_.reset();
     } else {
         emit recordingStarted();
     }
@@ -31,29 +53,52 @@ void RosbagRecorder::startRecording(const QString& bagName, const QStringList &t
 
 void RosbagRecorder::stopRecording()
 {
-    qint64 pid = rosbagProc->processId();
+    if (!rosbagProc_)
+        return;
 
-    if (!killProcessGroup(pid, SIGINT, 2000) && !killProcessGroup(pid, SIGTERM, 2000)) {
+    const qint64 pid = rosbagProc_->processId();
+
+    if (!killProcessGroup(pid, SIGINT, 2000) &&
+        !killProcessGroup(pid, SIGTERM, 2000)) {
         killProcessGroup(pid, SIGKILL, 0);
     }
 
-
+    rosbagProc_->waitForFinished();
+    rosbagProc_.reset();
+    emit recordingStopped();
 }
 
-bool killProcessGroup(qint64 pid, int sig, int waitMs) {
-    if (pid <= 0) return true;
+void RosbagRecorder::onProcessFinished(int, QProcess::ExitStatus)
+{
+    rosbagProc_.reset();
+    emit recordingStopped();
+}
 
-    ::kill(-pid, sig); // only sends a signal SIGTERM (doesn't wait for the processes in that group to act on it)
+void RosbagRecorder::onReadyReadStandardOutput()
+{
+    if (!rosbagProc_)
+        return;
+
+    const QString out = QString::fromUtf8(rosbagProc_->readAllStandardOutput());
+    emit processOutput(out);
+}
+
+bool RosbagRecorder::killProcessGroup(qint64 pid, int sig, int waitMs)
+{
+    if (pid <= 0)
+        return true;
+
+    ::kill(-pid, sig);
     if (waitMs == 0) {
-        return false; 
+        return false;
     }
 
     const qint64 t0 = QDateTime::currentMSecsSinceEpoch();
     while (QDateTime::currentMSecsSinceEpoch() - t0 < waitMs) {
-        // ::kill(pid, 0) is a POSIX "probe": it delivers no signal but reutrns 0 if the process still exists
-        if (::kill(pid, 0) == -1 && errno == ESRCH) return true;
-        QThread::msleep(50); // suspend the current thread
+        if (::kill(pid, 0) == -1 && errno == ESRCH)
+            return true;
+        QThread::msleep(50);
     }
-    return false; 
+    return false;
 }
 
