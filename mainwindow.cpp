@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include <signal.h>
+#include <errno.h>
 
 // anonymous namespace grants internal linkage to everything declared inside it, meaning that the constants exist only within this translation unit
 // implications: 
@@ -53,22 +55,22 @@ MainWindow::MainWindow(QWidget *parent)
     connect(diag_monitor_.get(), &DiagnosticsMonitor::statusChanged, this, &MainWindow::onDiagStatus);
 
     recorder_ = std::make_unique<RosbagRecorder>(this);
-    connect(ui->startRecordingButton, &QPushButton::clicked,
-            this, [this] {
-                if (isRecording) {
-                    QMessageBox::warning(this, "Record Warning", tr("Stop recording before starting a new one."));
-                    return; 
-                }
-                else if (recordTopics.isEmpty()) {
-                    QMessageBox::warning(this, "Record Warning", tr("Select at least one topic."));
-                    return; 
-                }
-                recorder_.startRecording("my_bag", topics);
-            });
-    connect(&recorder_, &RosbagRecorder::recordingStarted,
-        this, &MainWindow::onRecordingStarted);
-    connect(&recorder_, &RosbagRecorder::recordingStopped,
-            this, &MainWindow::onRecordingStopped);g
+    connect(ui->startRecordingButton, &QPushButton::clicked, this, [this] {
+        if (recorder_->getIsRecording()) {
+            QMessageBox::warning(this, "Record Warning", tr("Stop recording before starting a new one."));
+            return;
+        } else if (recordTopics_.isEmpty()) {
+            QMessageBox::warning(this, "Record Warning", tr("Select at least one topic."));
+            return;
+        }
+        recorder_->startRecording("my_bag", recordTopics_);
+    });
+    connect(ui->stopRecordingButton, &QPushButton::clicked,
+            recorder_.get(), &RosbagRecorder::stopRecording);
+    connect(recorder_.get(), &RosbagRecorder::recordingStarted,
+            this, &MainWindow::onRecordingStarted);
+    connect(recorder_.get(), &RosbagRecorder::recordingStopped,
+            this, &MainWindow::onRecordingStopped);
 }
 
 // -------------------------- Buttons --------------------------
@@ -308,18 +310,18 @@ MainWindow::~MainWindow() = default;
 void MainWindow::on_cameraCheckbox_stateChanged(int checked)
 {
     if (checked == 0) {
-        recordTopics.remove("/left_camera/image");
+        recordTopics_.remove("/left_camera/image");
     } else if (checked == 2) {
-        recordTopics << "/left_camera/image";
+        recordTopics_ << "/left_camera/image";
     }
 }
 
 void MainWindow::on_lidarCheckbox_stateChanged(int arg1)
 {
-    if (checked == 0) {
-        recordTopics.remove("/livox/lidar");
-    } else if (checked == 2) {
-        recordTopics << "/livox/lidar";
+    if (arg1 == 0) {
+        recordTopics_.remove("/livox/lidar");
+    } else if (arg1 == 2) {
+        recordTopics_ << "/livox/lidar";
     }
 }
 

@@ -14,6 +14,7 @@
 #include <csignal>
 #include <unordered_map>
 #include <QString>
+#include <QStringList>
 #include <QtGlobal> 
 #include <QLabel>
 #include "diagnostics_monitor.h"
@@ -69,6 +70,7 @@ private:
     std::unordered_map<QString, std::unique_ptr<QProcess>, QStringHash> drivers_; 
     std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
     QTimer* rosTimer_;
-    std::unique_ptr<RosbagRecorder> recorder_; 
+    std::unique_ptr<RosbagRecorder> recorder_;
+    QStringList recordTopics_;
 };
 #endif // MAINWINDOW_H
