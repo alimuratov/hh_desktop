@@ -15,6 +15,8 @@
 #include <unordered_map>
 #include <QString>
 #include <QtGlobal> 
+#include <QLabel>
+#include "diagnostics_monitor.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -41,18 +43,27 @@ private slots:
 
     // generic helpers
     void readDriverOutput();
-    void driverCrashed(); 
+    void processCrashed(); 
+    void processFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onDiagStatus(const QString&, int, const QString&, const QString&);
 private:
     std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
                                                   const QString& key); 
-    void shutdownDriver(const QString& key); 
+    void shutdownProcess(const QString& key); 
     bool killProcessGroup(qint64 pid, int sig, int waitMs); // qint64 is a qt's aliws for int64
     void startCamera();
     void stopCamera();
     void startLidar();
     void stopLidar(); 
+    void startWatchdog();
+    void stopWatchdog();
+    void handleProcessCrash(const QString& crashedProc);
+    void handleProcessCompletion(const QString& completedProc); 
+    QString findVictimKey(QProcess* proc);
 
     Ui::MainWindow *ui;
     std::unordered_map<QString, std::unique_ptr<QProcess>, QStringHash> drivers_; 
+    std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
+    QTimer* rosTimer_;
 };
 #endif // MAINWINDOW_H

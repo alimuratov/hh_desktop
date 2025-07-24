@@ -2,9 +2,7 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++14 link_pkgconfig
-PKGCONFIG += roscpp sensor_msgs diagnostic_updater
-
+CONFIG += c++14
 
 # The following define makes your compiler emit warnings if you use
 # any Qt feature that has been marked deprecated (the exact warnings
@@ -17,18 +15,13 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
-ROS_WS = /home/kodifly/handheld_scanner_ws/devel
-INCLUDEPATH += $${ROS_WS}/include
-
 SOURCES += \
     main.cpp \
-    mainwindow.cpp \
-    rosbagrecorder.cpp
+    mainwindow.cpp
 
 HEADERS += \
     mainwindow.h \
-    diagnostics_monitor.h \
-    rosbagrecorder.h
+    diagnostics_monitor.h
 
 FORMS += \
     mainwindow.ui

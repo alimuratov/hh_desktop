@@ -8,12 +8,28 @@
 // 3. we avoid one-definition-rule headaches that arise if you move the constants to a header
 // we can freely change their values here without forcing a full rebuild of every file that includes the header
 // and there is zero risk of multiple definitions at link time 
+
 namespace {
     constexpr char kCameraKey[] = "camera";
     constexpr char kLidarKey[] = "lidar";
     constexpr char kCameraScript[] = "/home/kodifly/setup_scripts/camera_setup.sh";
     constexpr char kLidarScript[] = "/home/kodifly/setup_scripts/lidar_setup.sh";
+    constexpr char kWatchdogExec[]   = "/home/kodifly/setup_scripts/watchdog_setup.sh";
+    constexpr char kWatchdogKey[]  = "watchdog";
 }
+
+// -------------------------- Color Helper --------------------------
+static QColor levelToColor(uint8_t level) {
+  using diagnostic_msgs::DiagnosticStatus;
+  switch (level) {
+    case DiagnosticStatus::OK:    return QColor("#2ECC71"); // green
+    case DiagnosticStatus::WARN:  return QColor("#F1C40F"); // yellow
+    case DiagnosticStatus::ERROR: return QColor("#E74C3C"); // red
+    default:                      return QColor("#95A5A6"); // grey
+  }
+}   
+
+// -------------------------- --------------------------
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -21,8 +37,20 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    rosTimer_ = new QTimer(this);
+    // pumping ROS callbacks at 100hz
+    // Qt has an overload of QObject::connect() that takes only three arguments: sender, signal and a functor
+    // Because a functor already embeds all the context it needs, there is no separate receiver parameter
+    connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
+    rosTimer_->start(10); 
+
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
+
+    ros::NodeHandle nh;
+    // can sit idle without hurting anything, its subscriber just sleeps until /diagnostics starts flowing 
+    diag_monitor_ = std::make_unique<DiagnosticsMonitor>(nh, this);
+    connect(diag_monitor_.get(), &DiagnosticsMonitor::statusChanged, this, &MainWindow::onDiagStatus);
 }
 
 // -------------------------- Buttons --------------------------
@@ -31,11 +59,13 @@ void MainWindow::startDrivers()
 {
     startCamera();
     startLidar(); 
+    startWatchdog();
 }
 
 void MainWindow::stopDrivers() {
     stopCamera();
     stopLidar(); 
+    stopWatchdog();
 }
 
 // -------------------------- Driver Utilities --------------------------
@@ -50,7 +80,7 @@ void MainWindow::startCamera() {
 }
 
 void MainWindow::stopCamera() {
-    shutdownDriver(kCameraKey); 
+    shutdownProcess(kCameraKey); 
 } 
 
 void MainWindow::startLidar() {
@@ -62,7 +92,36 @@ void MainWindow::startLidar() {
 }
 
 void MainWindow::stopLidar() {
-    shutdownDriver(kLidarKey);
+    shutdownProcess(kLidarKey);
+}
+
+void MainWindow::startWatchdog() {
+    if (drivers_.count(kWatchdogKey)) return;
+    auto proc = std::make_unique<QProcess>(this);
+    proc->setProcessChannelMode(QProcess::MergedChannels);
+
+    const QString program("/usr/bin/setsid");
+    const QStringList args {QString::fromUtf8(kWatchdogExec)};
+
+    connect(proc.get(), &QProcess::started, this, [p = proc.get()]{
+        qDebug() << "watchdog PID=" << p->processId();
+    });
+    connect(proc.get(), &QProcess::readyReadStandardOutput, this, &MainWindow::readDriverOutput);
+    connect(proc.get(), &QProcess::errorOccurred, this, &MainWindow::processCrashed);
+    connect(proc.get(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, &MainWindow::processFinished);
+
+    proc->start(program, args);
+    if (!proc->waitForStarted()) {
+        QMessageBox::critical(this, tr("Failed to start"), tr("watchdog node could not be launched"));
+        return;
+    }
+    drivers_.emplace(kWatchdogKey, std::move(proc));
+}
+
+void MainWindow::
+
+void MainWindow::stopWatchdog() {
+    shutdownProcess(kWatchdogKey);
 }
 
 // -------------------------- Process Factory --------------------------
@@ -83,9 +142,9 @@ std::unique_ptr<QProcess> MainWindow::createDriverProcess(const QString& scriptP
         qDebug() << key << " PID=" << p->processId();
     });
     connect(proc.get(), &QProcess::readyReadStandardOutput, this, &MainWindow::readDriverOutput);
-    connect(proc.get(), &QProcess::errorOccurred, this, &MainWindow::driverCrashed);
+    connect(proc.get(), &QProcess::errorOccurred, this, &MainWindow::processCrashed);
     connect(proc.get(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-            this, &MainWindow::driverCrashed); 
+            this, &MainWindow::processFinished); 
 
     proc->start(program, args);
     // blocks the calling thead until the child process has actually been forked 
@@ -98,37 +157,95 @@ std::unique_ptr<QProcess> MainWindow::createDriverProcess(const QString& scriptP
     return proc; 
 }
 
+// -------------------------- Diagnostics --------------------------
+
+void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg, const QString &recordedFrequency) {
+    qDebug() << "Name: " << name << " Level: " << level << " Message: " << msg;
+    // severity levels
+    const QString sev = (level == 0) ? "OK"
+                       : (level == 1) ? "WARN"
+                       : (level == 2) ? "ERROR"
+                       : "STALE";
+
+    QLabel* targetLabel; 
+    if (name == "river_watchdog: camera_rate") {
+        targetLabel = ui->cameraStatus;
+    } else if (name == "river_watchdog: lidar_rate") {
+        targetLabel = ui->lidarStatus;
+    } else {
+        return; 
+    }
+
+    targetLabel->setText(tr("%1: %2, Recorded Frequency: %3").arg(sev, msg, recordedFrequency));
+    targetLabel->setStyleSheet(QStringLiteral("color:%1;")
+                               .arg(levelToColor(level).name()));
+
+    // if (level >= 2) { // ERROR ‑ pop up.
+    //  QMessageBox::critical(this, tr("Watchdog"),
+    //                         tr("%1 driver reported %2\n%3").arg(name, sev, msg));
+    // }
+  }
+
+
 // -------------------------- Generic Slots --------------------------
 
 void MainWindow::readDriverOutput() {
     auto* senderProc = qobject_cast<QProcess*>(sender());
-    if (!senderProc) return; 
+    if (!senderProc) return;
     const QString text = QString::fromUtf8(senderProc->readAllStandardOutput());
     qDebug().noquote() << text; 
 }
 
-void MainWindow::driverCrashed() {
+void MainWindow::processCrashed() {
     // if you drop the asterisk here, the deduced type is still QProcess*, so the program works
     // but the declartion would look as if senderProc might be an object rather than a pointer 
     auto* senderProc = qobject_cast<QProcess*>(sender()); 
     if (!senderProc) return; 
+    QString victimKey = findVictimKey(senderProc);
+    if (!victimKey.isEmpty()) {
+        handleProcessCrash(victimKey);
+    }
+}
 
-    QString victimKey; 
+// not a slot, but a private method that handles process crashes
+void MainWindow::handleProcessCrash(const QString& crashedProc) {
+    shutdownProcess(crashedProc); 
+    QMessageBox::warning(this, "Process Failure", tr("%1 has stopped running.").arg(crashedProc));
+}
+
+void MainWindow::processFinished(int exitCode, QProcess::ExitStatus exitStatus) {
+    auto* senderProc = qobject_cast<QProcess*>(sender()); 
+    if (!senderProc) return; 
+    QString victimKey = findVictimKey(senderProc);
+    if (victimKey.isEmpty()) {
+        return; 
+    }
+    if (exitStatus == QProcess::CrashExit) {
+        handleProcessCrash(victimKey);
+        return; 
+    }
+
+    handleProcessCompletion(victimKey);
+}
+
+// not a slot as well 
+void MainWindow::handleProcessCompletion(const QString& completedProc) {
+    shutdownProcess(completedProc);
+    QMessageBox::information(this, "Process Completion", tr("%1 has finished.").arg(completedProc));
+}
+
+QString MainWindow::findVictimKey(QProcess* proc) {
     for (const auto& pair : drivers_) {
-        if (pair.second.get() == senderProc) {
-            victimKey = pair.first; 
-            break; 
+        if (pair.second.get() == proc) {
+            return pair.first; 
         }
     }
-    if (victimKey.isEmpty()) return; 
-
-    QMessageBox::warning(this, tr("Driver stopped"), tr("%1 has stopped running.").arg(victimKey));
-    shutdownDriver(victimKey); 
+    return QString(); // not found
 }
 
 // -------------------------- Shutdown Helpers --------------------------
 
-void MainWindow::shutdownDriver(const QString& key) {
+void MainWindow::shutdownProcess(const QString& key) {
     auto it = drivers_.find(key);
     if (it == drivers_.end()) return; 
 
@@ -164,7 +281,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     for (auto it = drivers_.begin(); it != drivers_.end(); ) {
         const QString key = it->first;
         ++it;
-        shutdownDriver(key);
+        shutdownProcess(key);
     }
     QMainWindow::closeEvent(event);
 }

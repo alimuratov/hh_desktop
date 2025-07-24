@@ -82,12 +82,12 @@
       <item row="0" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
-         <string>DriverStatus</string>
+         <string>CameraStatus</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QLabel" name="driverStatus">
+       <widget class="QLabel" name="cameraStatus">
         <property name="text">
          <string>Initializing ...</string>
         </property>
@@ -101,7 +101,7 @@
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QLabel" name="label_4">
+       <widget class="QLabel" name="lidarStatus">
         <property name="text">
          <string>Initializing ...</string>
         </property>
