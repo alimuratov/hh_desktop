@@ -44,11 +44,15 @@ MainWindow::MainWindow(QWidget *parent)
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
     rosTimer_->start(10); 
 
-    recorder_ = std::make_unique<RosbagRecorder>(this);
-
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
 
+    ros::NodeHandle nh;
+    // can sit idle without hurting anything, its subscriber just sleeps until /diagnostics starts flowing 
+    diag_monitor_ = std::make_unique<DiagnosticsMonitor>(nh, this);
+    connect(diag_monitor_.get(), &DiagnosticsMonitor::statusChanged, this, &MainWindow::onDiagStatus);
+
+    recorder_ = std::make_unique<RosbagRecorder>(this);
     connect(ui->startRecordingButton, &QPushButton::clicked,
             this, [this] {
                 if (isRecording) {
@@ -61,17 +65,10 @@ MainWindow::MainWindow(QWidget *parent)
                 }
                 recorder_.startRecording("my_bag", topics);
             });
-    
     connect(&recorder_, &RosbagRecorder::recordingStarted,
         this, &MainWindow::onRecordingStarted);
     connect(&recorder_, &RosbagRecorder::recordingStopped,
-            this, &MainWindow::onRecordingStopped);
-
-
-    ros::NodeHandle nh;
-    // can sit idle without hurting anything, its subscriber just sleeps until /diagnostics starts flowing 
-    diag_monitor_ = std::make_unique<DiagnosticsMonitor>(nh, this);
-    connect(diag_monitor_.get(), &DiagnosticsMonitor::statusChanged, this, &MainWindow::onDiagStatus);
+            this, &MainWindow::onRecordingStopped);g
 }
 
 // -------------------------- Buttons --------------------------
