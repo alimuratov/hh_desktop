@@ -16,7 +16,7 @@ public:
     ~RosbagRecorder();
 
 public slots:
-    void startRecording(const QStringList &topics);
+    void startRecording(const QString &bagName, const QStringList &topics);
     void stopRecording();
 
 signals:
@@ -29,7 +29,8 @@ private slots:
     void onReadyReadStandardOutput();
 
 private:
-    std::unique_ptr<QProcess> *rosbagProc;
+    bool killProcessGroup(qint64 pid, int sig, int waitMs);
+    std::unique_ptr<QProcess> rosbagProc_;
 };
 
 #endif // ROSBAGRECORDER_H
