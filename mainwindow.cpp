@@ -44,7 +44,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
     rosTimer_->start(10); 
 
-    rec
+    recorder_ = std::make_unique<RosbagRecorder>(this);
 
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);

@@ -14,7 +14,13 @@ RosbagRecorder::RosbagRecorder(QObject *parent)
 {
 }
 
-RosbagRecorder::~RosbagRecorder() = default;
+RosbagRecorder::~RosbagRecorder()
+{
+    // ensure the recording process is terminated if the object is destroyed
+    if (rosbagProc_)
+        stopRecording();
+}
+
 
 void RosbagRecorder::startRecording(const QString &bagName,
                                     const QStringList &topics)
