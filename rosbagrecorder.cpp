@@ -48,6 +48,7 @@ void RosbagRecorder::startRecording(const QString &bagName,
         rosbagProc_.reset();
     } else {
         emit recordingStarted();
+        isRecording = true;
     }
 }
 
@@ -66,6 +67,7 @@ void RosbagRecorder::stopRecording()
     rosbagProc_->waitForFinished();
     rosbagProc_.reset();
     emit recordingStopped();
+    isRecording = false;
 }
 
 void RosbagRecorder::onProcessFinished(int, QProcess::ExitStatus)

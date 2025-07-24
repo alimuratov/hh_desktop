@@ -17,6 +17,7 @@
 #include <QtGlobal> 
 #include <QLabel>
 #include "diagnostics_monitor.h"
+#include "rosbagrecorder.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -46,6 +47,9 @@ private slots:
     void processCrashed(); 
     void processFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onDiagStatus(const QString&, int, const QString&, const QString&);
+
+    void onRecordingStarted();
+    void onRecordingStopped(); 
 private:
     std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
                                                   const QString& key); 
@@ -65,5 +69,6 @@ private:
     std::unordered_map<QString, std::unique_ptr<QProcess>, QStringHash> drivers_; 
     std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
     QTimer* rosTimer_;
+    std::unique_ptr<RosbagRecorder> recorder_; 
 };
 #endif // MAINWINDOW_H

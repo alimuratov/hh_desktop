@@ -44,8 +44,29 @@ MainWindow::MainWindow(QWidget *parent)
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
     rosTimer_->start(10); 
 
+    rec
+
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
+
+    connect(ui->startRecordingButton, &QPushButton::clicked,
+            this, [this] {
+                if (isRecording) {
+                    QMessageBox::warning(this, "Record Warning", tr("Stop recording before starting a new one."));
+                    return; 
+                }
+                else if (recordTopics.isEmpty()) {
+                    QMessageBox::warning(this, "Record Warning", tr("Select at least one topic."));
+                    return; 
+                }
+                recorder_.startRecording("my_bag", topics);
+            });
+    
+    connect(&recorder_, &RosbagRecorder::recordingStarted,
+        this, &MainWindow::onRecordingStarted);
+    connect(&recorder_, &RosbagRecorder::recordingStopped,
+            this, &MainWindow::onRecordingStopped);
+
 
     ros::NodeHandle nh;
     // can sit idle without hurting anything, its subscriber just sleeps until /diagnostics starts flowing 
@@ -117,8 +138,6 @@ void MainWindow::startWatchdog() {
     }
     drivers_.emplace(kWatchdogKey, std::move(proc));
 }
-
-void MainWindow::
 
 void MainWindow::stopWatchdog() {
     shutdownProcess(kWatchdogKey);
@@ -288,3 +307,29 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 
 MainWindow::~MainWindow() = default; 
 
+
+void MainWindow::on_cameraCheckbox_stateChanged(int checked)
+{
+    if (checked == 0) {
+        recordTopics.remove("/left_camera/image");
+    } else if (checked == 2) {
+        recordTopics << "/left_camera/image";
+    }
+}
+
+void MainWindow::on_lidarCheckbox_stateChanged(int arg1)
+{
+    if (checked == 0) {
+        recordTopics.remove("/livox/lidar");
+    } else if (checked == 2) {
+        recordTopics << "/livox/lidar";
+    }
+}
+
+void MainWindow::onRecordingStarted() {
+    ui->recordStatus.setText("Recording...");
+}
+
+void MainWindow::onRecordingStopped() {
+    ui->recordStatus.setText("OFF");
+}
