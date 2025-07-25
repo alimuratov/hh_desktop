@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include <signal.h>
 #include <errno.h>
+#include <QVBoxLayout>
 
 // anonymous namespace grants internal linkage to everything declared inside it, meaning that the constants exist only within this translation unit
 // implications: 
@@ -18,6 +19,7 @@ namespace {
     constexpr char kLidarScript[] = "/home/kodifly/setup_scripts/lidar_setup.sh";
     constexpr char kWatchdogExec[]   = "/home/kodifly/setup_scripts/watchdog_setup.sh";
     constexpr char kWatchdogKey[]  = "watchdog";
+    constexpr char kRvizConfig[] = "config/view.rviz";
 }
 
 // -------------------------- Color Helper --------------------------
@@ -38,6 +40,11 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    rviz_widget_ = std::make_unique<RvizWidget>(QStringLiteral(kRvizConfig), this);
+    auto rvizLayout = new QVBoxLayout(ui->rvizContainer);
+    rvizLayout->setContentsMargins(0, 0, 0, 0);
+    rvizLayout->addWidget(rviz_widget_.get());
 
     rosTimer_ = new QTimer(this);
     // pumping ROS callbacks at 100hz
