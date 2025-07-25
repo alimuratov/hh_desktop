@@ -246,6 +246,16 @@
       </item>
      </layout>
     </item>
+    <item>
+     <widget class="QWidget" name="rvizContainer" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>640</width>
+        <height>480</height>
+       </size>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">

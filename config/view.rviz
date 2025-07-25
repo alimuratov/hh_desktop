@@ -1,0 +1,19 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Image
+      Name: Camera
+      Enabled: true
+      Image Topic: /left_camera/image
+  Global Options:
+    Fixed Frame: map
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Target Frame: map
