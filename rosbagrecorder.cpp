@@ -1,6 +1,7 @@
 #include "rosbagrecorder.h"
 
 #include <QDateTime>
+#include <QDate>
 #include <QDebug>
 #include <QMessageBox>
 #include <QThread>
@@ -39,8 +40,10 @@ void RosbagRecorder::startRecording(const QString &bagName,
     QStringList topicList = topics.values();
 
     const QString program("/usr/bin/setsid");
+    const QString date = QDate::currentDate().toString("yyyyMMdd");
+    const QString finalName = bagName + '_' + date;
     QString cmd = QStringLiteral("exec rosbag record -O %1 --lz4 --tcpnodelay %2")
-                       .arg(bagName, topicList.join(' '));
+                       .arg(finalName, topicList.join(' '));
     const QStringList args{"/bin/bash", "-c", cmd};
  
 
