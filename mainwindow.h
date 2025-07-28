@@ -19,6 +19,7 @@
 #include <QLabel>
 #include "diagnostics_monitor.h"
 #include "rosbagrecorder.h"
+#include "rvizwidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -73,6 +74,7 @@ private:
     std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
     QTimer* rosTimer_;
     std::unique_ptr<RosbagRecorder> recorder_;
+    std::unique_ptr<RvizWidget> rviz_widget_;
     QSet<QString> recordTopics_;
 };
 #endif // MAINWINDOW_H

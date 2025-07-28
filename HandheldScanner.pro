@@ -3,7 +3,7 @@ QT       += core gui
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++14 link_pkgconfig
-PKGCONFIG += roscpp sensor_msgs diagnostic_updater
+PKGCONFIG += roscpp sensor_msgs diagnostic_updater rviz
 
 
 # The following define makes your compiler emit warnings if you use
@@ -23,12 +23,14 @@ INCLUDEPATH += $${ROS_WS}/include
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    rosbagrecorder.cpp
+    rosbagrecorder.cpp \
+    rvizwidget.cpp
 
 HEADERS += \
     mainwindow.h \
     diagnostics_monitor.h \
-    rosbagrecorder.h
+    rosbagrecorder.h \
+    rvizwidget.h
 
 FORMS += \
     mainwindow.ui
