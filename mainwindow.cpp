@@ -19,7 +19,7 @@ namespace {
     constexpr char kLidarScript[] = "/home/kodifly/setup_scripts/lidar_setup.sh";
     constexpr char kWatchdogExec[]   = "/home/kodifly/setup_scripts/watchdog_setup.sh";
     constexpr char kWatchdogKey[]  = "watchdog";
-    constexpr char kRvizConfig[] = "config/view.rviz";
+    constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
 }
 
 // -------------------------- Color Helper --------------------------
@@ -36,12 +36,11 @@ static QColor levelToColor(uint8_t level) {
 // -------------------------- --------------------------
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
+    : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 
-    rviz_widget_ = std::make_unique<RvizWidget>(QStringLiteral(kRvizConfig), this);
+    rviz_widget_ = std::make_unique<RvizWidget>(QString::fromUtf8(kRvizConfig), this);
     auto rvizLayout = new QVBoxLayout(ui->rvizContainer);
     rvizLayout->setContentsMargins(0, 0, 0, 0);
     rvizLayout->addWidget(rviz_widget_.get());
@@ -110,6 +109,8 @@ void MainWindow::startCamera() {
 
 void MainWindow::stopCamera() {
     shutdownProcess(kCameraKey); 
+    ui->cameraStatus->setText(tr("Camera driver stopped."));
+    ui->cameraStatus->setStyleSheet("");
 } 
 
 void MainWindow::startLidar() {
@@ -122,6 +123,8 @@ void MainWindow::startLidar() {
 
 void MainWindow::stopLidar() {
     shutdownProcess(kLidarKey);
+    ui->lidarStatus->setText(tr("Lidar driver stopped."));
+    ui->lidarStatus->setStyleSheet("");
 }
 
 void MainWindow::startWatchdog() {

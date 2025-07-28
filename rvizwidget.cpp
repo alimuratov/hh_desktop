@@ -10,6 +10,8 @@ RvizWidget::RvizWidget(const QString& configPath, QWidget* parent)
     : QWidget(parent)
 {
     frame_ = new rviz::VisualizationFrame();
+    // Set the path to the "splash" image file. This image is shown during initialization 
+    // and loading of the first config file. Default is a file in the RViz package. To prevent splash image from showing, set this to an empty string.
     frame_->setSplashPath( "" );
     frame_->initialize();
     frame_->setMenuBar(nullptr);
@@ -17,7 +19,7 @@ RvizWidget::RvizWidget(const QString& configPath, QWidget* parent)
     if (QFileInfo::exists(configPath)) {
         rviz::YamlConfigReader reader;
         rviz::Config config;
-        reader.readFile(config, configPath.toStdString());
+        reader.readFile(config, configPath);
         frame_->load(config);
     }
 
