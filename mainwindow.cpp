@@ -48,15 +48,12 @@ MainWindow::MainWindow(QWidget *parent)
     rviz_widget_ = std::make_unique<RvizWidget>(QString::fromUtf8(kRvizConfig), this);
     auto rvizLayout = new QVBoxLayout(ui->rvizContainer);
     rvizLayout->setContentsMargins(0, 0, 0, 0);
-    rvizLayout->addWidget(rviz_widget_.get());
+    rvizLayout->addWidget(rviz_widget_.get());     
 #else
+      
     ui->rvizContainer->setVisible(false);
-#endif
 
     rosTimer_ = new QTimer(this);
-    // pumping ROS callbacks at 100hz
-    // Qt has an overload of QObject::connect() that takes only three arguments: sender, signal and a functor
-    // Because a functor already embeds all the context it needs, there is no separate receiver parameter
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
     rosTimer_->start(10); 
 
