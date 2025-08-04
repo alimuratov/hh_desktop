@@ -21,6 +21,8 @@ namespace {
     constexpr char kLidarScript[] = "/home/kodifly/setup_scripts/lidar_setup.sh";
       constexpr char kWatchdogExec[]   = "/home/kodifly/setup_scripts/watchdog_setup.sh";
       constexpr char kWatchdogKey[]  = "watchdog";
+    constexpr char kSlamKey[] = "slam";
+    constexpr char kSlamScript[] = "/home/kodifly/setup_scripts/start_slam.sh";
 #ifdef HH_ENABLE_RVIZ
       constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
 #endif
@@ -55,10 +57,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     rosTimer_ = new QTimer(this);
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
-    rosTimer_->start(10); 
+    rosTimer_->start(10);
 
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
+    connect(ui->startSlamButton, &QPushButton::clicked, this, &MainWindow::startSlam);
+    connect(ui->stopSlamButton, &QPushButton::clicked, this, &MainWindow::stopSlam);
+    ui->startSlamButton->setEnabled(false);
+    ui->stopSlamButton->setEnabled(false);
 
     ros::NodeHandle nh;
     // can sit idle without hurting anything, its subscriber just sleeps until /diagnostics starts flowing 
@@ -91,14 +97,20 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::startDrivers()
 {
     startCamera();
-    startLidar(); 
+    startLidar();
     startWatchdog();
+    if (drivers_.count(kCameraKey) && drivers_.count(kLidarKey)) {
+        ui->startSlamButton->setEnabled(true);
+    }
 }
 
 void MainWindow::stopDrivers() {
+    stopSlam();
     stopCamera();
-    stopLidar(); 
+    stopLidar();
     stopWatchdog();
+    ui->startSlamButton->setEnabled(false);
+    ui->stopSlamButton->setEnabled(false);
 }
 
 // -------------------------- Driver Utilities --------------------------
@@ -157,6 +169,22 @@ void MainWindow::startWatchdog() {
 
 void MainWindow::stopWatchdog() {
     shutdownProcess(kWatchdogKey);
+}
+
+void MainWindow::startSlam() {
+    if (drivers_.count(kSlamKey)) return;
+
+    auto proc = createDriverProcess(kSlamScript, kSlamKey);
+    if (!proc) return;
+    drivers_.emplace(kSlamKey, std::move(proc));
+    ui->startSlamButton->setEnabled(false);
+    ui->stopSlamButton->setEnabled(true);
+}
+
+void MainWindow::stopSlam() {
+    shutdownProcess(kSlamKey);
+    ui->stopSlamButton->setEnabled(false);
+    ui->startSlamButton->setEnabled(drivers_.count(kCameraKey) && drivers_.count(kLidarKey));
 }
 
 // -------------------------- Process Factory --------------------------
@@ -244,8 +272,15 @@ void MainWindow::processCrashed() {
 
 // not a slot, but a private method that handles process crashes
 void MainWindow::handleProcessCrash(const QString& crashedProc) {
-    shutdownProcess(crashedProc); 
+    shutdownProcess(crashedProc);
     QMessageBox::warning(this, "Process Failure", tr("%1 has stopped running.").arg(crashedProc));
+    if (crashedProc == kSlamKey) {
+        ui->stopSlamButton->setEnabled(false);
+        ui->startSlamButton->setEnabled(drivers_.count(kCameraKey) && drivers_.count(kLidarKey));
+    } else if (crashedProc == kCameraKey || crashedProc == kLidarKey) {
+        stopSlam();
+        ui->startSlamButton->setEnabled(false);
+    }
 }
 
 void MainWindow::processFinished(int exitCode, QProcess::ExitStatus exitStatus) {
@@ -267,6 +302,13 @@ void MainWindow::processFinished(int exitCode, QProcess::ExitStatus exitStatus) 
 void MainWindow::handleProcessCompletion(const QString& completedProc) {
     shutdownProcess(completedProc);
     QMessageBox::information(this, "Process Completion", tr("%1 has finished.").arg(completedProc));
+    if (completedProc == kSlamKey) {
+        ui->stopSlamButton->setEnabled(false);
+        ui->startSlamButton->setEnabled(drivers_.count(kCameraKey) && drivers_.count(kLidarKey));
+    } else if (completedProc == kCameraKey || completedProc == kLidarKey) {
+        stopSlam();
+        ui->startSlamButton->setEnabled(false);
+    }
 }
 
 QString MainWindow::findVictimKey(QProcess* proc) {

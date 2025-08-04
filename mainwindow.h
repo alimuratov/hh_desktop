@@ -45,6 +45,8 @@ private slots:
     // UI buttons
     void startDrivers();
     void stopDrivers();
+    void startSlam();
+    void stopSlam();
 
     // generic helpers
     void readDriverOutput();
