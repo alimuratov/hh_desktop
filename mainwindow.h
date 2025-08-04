@@ -19,7 +19,9 @@
 #include <QLabel>
 #include "diagnostics_monitor.h"
 #include "rosbagrecorder.h"
+#ifdef HH_ENABLE_RVIZ
 #include "rvizwidget.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -71,10 +73,12 @@ private:
 
     Ui::MainWindow *ui;
     std::unordered_map<QString, std::unique_ptr<QProcess>, QStringHash> drivers_; 
-    std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
-    QTimer* rosTimer_;
-    std::unique_ptr<RosbagRecorder> recorder_;
-    std::unique_ptr<RvizWidget> rviz_widget_;
-    QSet<QString> recordTopics_;
+#ifdef HH_ENABLE_RVIZ
+      std::unique_ptr<RvizWidget> rviz_widget_;
+#endif
+      std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
+      QTimer* rosTimer_;
+      std::unique_ptr<RosbagRecorder> recorder_;
+      QSet<QString> recordTopics_;
 };
 #endif // MAINWINDOW_H
