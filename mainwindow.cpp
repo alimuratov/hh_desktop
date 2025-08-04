@@ -246,7 +246,7 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
         return; 
     }
 
-    targetLabel->setText(tr("%1: %2, Recorded Frequency: %3").arg(sev, msg, recordedFrequency));
+    targetLabel->setText(tr("%1: %2").arg(sev, msg ));
     targetLabel->setStyleSheet(QStringLiteral("color:%1;")
                                .arg(levelToColor(level).name()));
 
