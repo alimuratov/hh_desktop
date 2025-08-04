@@ -62,13 +62,15 @@ private slots:
     void showPrevPage();
 private:
     std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
-                                                  const QString& key); 
-    void shutdownProcess(const QString& key); 
+                                                  const QString& key);
+    void shutdownProcess(const QString& key);
     bool killProcessGroup(qint64 pid, int sig, int waitMs); // qint64 is a qt's aliws for int64
+    void startRoscore();
+    void stopRoscore();
     void startCamera();
     void stopCamera();
     void startLidar();
-    void stopLidar(); 
+    void stopLidar();
     void startWatchdog();
     void stopWatchdog();
     void handleProcessCrash(const QString& crashedProc);
