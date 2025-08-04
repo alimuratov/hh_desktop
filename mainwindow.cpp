@@ -316,7 +316,7 @@ void MainWindow::handleProcessCompletion(const QString& completedProc) {
         stopSlam();
         ui->startSlamButton->setEnabled(false);
     }
-}
+ }
 
 QString MainWindow::findVictimKey(QProcess* proc) {
     for (const auto& pair : drivers_) {
