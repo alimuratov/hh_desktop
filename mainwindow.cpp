@@ -2,7 +2,9 @@
 #include "ui_mainwindow.h"
 #include <signal.h>
 #include <errno.h>
+#ifdef HH_ENABLE_RVIZ
 #include <QVBoxLayout>
+#endif
 
 // anonymous namespace grants internal linkage to everything declared inside it, meaning that the constants exist only within this translation unit
 // implications: 
@@ -17,10 +19,12 @@ namespace {
     constexpr char kLidarKey[] = "lidar";
     constexpr char kCameraScript[] = "/home/kodifly/setup_scripts/camera_setup.sh";
     constexpr char kLidarScript[] = "/home/kodifly/setup_scripts/lidar_setup.sh";
-    constexpr char kWatchdogExec[]   = "/home/kodifly/setup_scripts/watchdog_setup.sh";
-    constexpr char kWatchdogKey[]  = "watchdog";
-    constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
-}
+      constexpr char kWatchdogExec[]   = "/home/kodifly/setup_scripts/watchdog_setup.sh";
+      constexpr char kWatchdogKey[]  = "watchdog";
+#ifdef HH_ENABLE_RVIZ
+      constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
+#endif
+  }
 
 // -------------------------- Color Helper --------------------------
 static QColor levelToColor(uint8_t level) {
@@ -40,12 +44,14 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    /*
+#ifdef HH_ENABLE_RVIZ
     rviz_widget_ = std::make_unique<RvizWidget>(QString::fromUtf8(kRvizConfig), this);
     auto rvizLayout = new QVBoxLayout(ui->rvizContainer);
     rvizLayout->setContentsMargins(0, 0, 0, 0);
-    rvizLayout->addWidget(rviz_widget_.get());
-    */
+    rvizLayout->addWidget(rviz_widget_.get());     
+#else
+      
+    ui->rvizContainer->setVisible(false);
 
     rosTimer_ = new QTimer(this);
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });

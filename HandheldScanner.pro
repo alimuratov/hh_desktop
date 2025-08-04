@@ -3,7 +3,19 @@ QT       += core gui
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++14 link_pkgconfig
-PKGCONFIG += roscpp sensor_msgs diagnostic_updater rviz
+PKGCONFIG += roscpp sensor_msgs diagnostic_updater
+
+contains(CONFIG, rviz) {
+    message("RViz integration enabled")
+    PKGCONFIG += rviz
+    DEFINES += HH_ENABLE_RVIZ
+    SOURCES += \
+        rvizwidget.cpp
+    HEADERS += \
+        rvizwidget.h
+} else {
+    message("RViz integration disabled. Pass CONFIG+=rviz to enable.")
+}
 
 
 # The following define makes your compiler emit warnings if you use
@@ -23,14 +35,12 @@ INCLUDEPATH += $${ROS_WS}/include
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    rosbagrecorder.cpp \
-    rvizwidget.cpp
+    rosbagrecorder.cpp
 
 HEADERS += \
     mainwindow.h \
     diagnostics_monitor.h \
-    rosbagrecorder.h \
-    rvizwidget.h
+    rosbagrecorder.h
 
 FORMS += \
     mainwindow.ui
