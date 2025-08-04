@@ -23,6 +23,8 @@ namespace {
       constexpr char kWatchdogKey[]  = "watchdog";
     constexpr char kSlamKey[] = "slam";
     constexpr char kSlamScript[] = "/home/kodifly/setup_scripts/start_slam.sh";
+    constexpr char kRoscoreKey[] = "roscore";
+    constexpr char kRoscoreExec[] = "roscore";
 #ifdef HH_ENABLE_RVIZ
       constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
 #endif
@@ -103,6 +105,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::startDrivers()
 {
+    startRoscore();
     startCamera();
     startLidar();
     startWatchdog();
@@ -116,11 +119,33 @@ void MainWindow::stopDrivers() {
     stopCamera();
     stopLidar();
     stopWatchdog();
+    stopRoscore();
     ui->startSlamButton->setEnabled(false);
     ui->stopSlamButton->setEnabled(false);
 }
 
 // -------------------------- Driver Utilities --------------------------
+
+void MainWindow::startRoscore() {
+    if (drivers_.count(kRoscoreKey)) return;
+
+    ui->roscoreStatus->setText(tr("Starting..."));
+    auto proc = createDriverProcess(QString::fromUtf8(kRoscoreExec), kRoscoreKey);
+    if (!proc) {
+        ui->roscoreStatus->setText(tr("Failed to start roscore."));
+        ui->roscoreStatus->setStyleSheet("color:red;");
+        return;
+    }
+    ui->roscoreStatus->setText(tr("Running"));
+    ui->roscoreStatus->setStyleSheet("color:green;");
+    drivers_.emplace(kRoscoreKey, std::move(proc));
+}
+
+void MainWindow::stopRoscore() {
+    shutdownProcess(kRoscoreKey);
+    ui->roscoreStatus->setText(tr("Roscore stopped."));
+    ui->roscoreStatus->setStyleSheet("");
+}
 
 void MainWindow::startCamera() {
     // if the camera driver is already running
@@ -287,6 +312,9 @@ void MainWindow::handleProcessCrash(const QString& crashedProc) {
     } else if (crashedProc == kCameraKey || crashedProc == kLidarKey) {
         stopSlam();
         ui->startSlamButton->setEnabled(false);
+    } else if (crashedProc == kRoscoreKey) {
+        ui->roscoreStatus->setText(tr("Roscore crashed."));
+        ui->roscoreStatus->setStyleSheet("color:red;");
     }
 }
 
@@ -315,6 +343,9 @@ void MainWindow::handleProcessCompletion(const QString& completedProc) {
     } else if (completedProc == kCameraKey || completedProc == kLidarKey) {
         stopSlam();
         ui->startSlamButton->setEnabled(false);
+    } else if (completedProc == kRoscoreKey) {
+        ui->roscoreStatus->setText(tr("Roscore stopped."));
+        ui->roscoreStatus->setStyleSheet("");
     }
  }
 
