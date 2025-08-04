@@ -59,8 +59,8 @@ MainWindow::MainWindow(QWidget *parent)
     rvizLayout->setContentsMargins(0, 0, 0, 0);
     rvizLayout->addWidget(rviz_widget_.get());     
 #else
-      
     ui->rvizContainer->setVisible(false);
+#endif
 
     rosTimer_ = new QTimer(this);
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
