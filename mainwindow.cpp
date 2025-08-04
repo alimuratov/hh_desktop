@@ -46,6 +46,13 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    connect(ui->nextPageButton, &QPushButton::clicked, this, &MainWindow::showNextPage);
+    connect(ui->prevPageButton, &QPushButton::clicked, this, &MainWindow::showPrevPage);
+    ui->prevPageButton->setEnabled(false);
+    if (ui->stackedWidget->count() <= 1) {
+        ui->nextPageButton->setEnabled(false);
+    }
+
 #ifdef HH_ENABLE_RVIZ
     rviz_widget_ = std::make_unique<RvizWidget>(QString::fromUtf8(kRvizConfig), this);
     auto rvizLayout = new QVBoxLayout(ui->rvizContainer);
@@ -390,4 +397,22 @@ void MainWindow::onRecordingStarted() {
 
 void MainWindow::onRecordingStopped() {
     ui->recordStatus->setText("OFF");
+}
+
+void MainWindow::showNextPage() {
+    int index = ui->stackedWidget->currentIndex();
+    if (index < ui->stackedWidget->count() - 1) {
+        ui->stackedWidget->setCurrentIndex(index + 1);
+    }
+    ui->prevPageButton->setEnabled(true);
+    ui->nextPageButton->setEnabled(ui->stackedWidget->currentIndex() < ui->stackedWidget->count() - 1);
+}
+
+void MainWindow::showPrevPage() {
+    int index = ui->stackedWidget->currentIndex();
+    if (index > 0) {
+        ui->stackedWidget->setCurrentIndex(index - 1);
+    }
+    ui->nextPageButton->setEnabled(true);
+    ui->prevPageButton->setEnabled(ui->stackedWidget->currentIndex() > 0);
 }

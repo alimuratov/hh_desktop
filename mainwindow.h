@@ -55,9 +55,11 @@ private slots:
     void onDiagStatus(const QString&, int, const QString&, const QString&);
 
     void onRecordingStarted();
-    void onRecordingStopped(); 
+    void onRecordingStopped();
     void on_cameraCheckbox_stateChanged(int checked);
     void on_lidarCheckbox_stateChanged(int checked);
+    void showNextPage();
+    void showPrevPage();
 private:
     std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
                                                   const QString& key); 
