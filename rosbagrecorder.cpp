@@ -86,6 +86,7 @@ void RosbagRecorder::onProcessFinished(int, QProcess::ExitStatus)
 {
     rosbagProc_.reset();
     emit recordingStopped();
+    isRecording = false;
 }
 
 void RosbagRecorder::onReadyReadStandardOutput()

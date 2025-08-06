@@ -33,13 +33,13 @@ private:
         continue; // we only care about these two tasks
       }
       int level = status.level;
-      auto it = last_level_.find(name);
+      auto it = last_level_.find(name); 
       std::string frequency; 
       for (const auto& kv : status.values)
       {
           if (kv.key == "Actual frequency (Hz)")
           {
-              frequency =  kv.value.c_str(); 
+              frequency = kv.value; 
               break;
           }
       }

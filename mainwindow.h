@@ -64,7 +64,7 @@ private:
     std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
                                                   const QString& key);
     void shutdownProcess(const QString& key);
-    bool killProcessGroup(qint64 pid, int sig, int waitMs); // qint64 is a qt's aliws for int64
+    bool killProcessGroup(qint64 pid, int sig, int waitMs); // qint64 is Qt's alias for int64
     void startRoscore();
     void stopRoscore();
     void startCamera();
