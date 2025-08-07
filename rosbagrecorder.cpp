@@ -49,6 +49,8 @@ void RosbagRecorder::startRecording(const QString &bagName,
     connect(rosbagProc_.get(),
             qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
             this, &RosbagRecorder::onProcessFinished);
+     connect(rosbagProc_.get(), &QProcess::errorOccurred,
+            this, &RosbagRecorder::onProcessError);
     connect(rosbagProc_.get(), &QProcess::started, this, [p = rosbagProc_.get()] {
         qDebug() << "rosbag record PID=" << p->processId();
     });
@@ -57,10 +59,13 @@ void RosbagRecorder::startRecording(const QString &bagName,
     if (!rosbagProc_->waitForStarted()) {
         QMessageBox::critical(nullptr, tr("Failed to start"),
                               tr("rosbag record could not be launched"));
+        const QString err = tr("rosbag record could not be launched");
+        QMessageBox::critical(nullptr, tr("Failed to start"), err);
+        emit recordingError(err);
         rosbagProc_.reset();
     } else {
         emit recordingStarted();
-        isRecording = true;
+        isRecording_ = true;
     }
 }
 
@@ -79,14 +84,23 @@ void RosbagRecorder::stopRecording()
     rosbagProc_->waitForFinished();
     rosbagProc_.reset();
     emit recordingStopped();
-    isRecording = false;
+    isRecording_ = false;
 }
 
 void RosbagRecorder::onProcessFinished(int, QProcess::ExitStatus)
 {
     rosbagProc_.reset();
     emit recordingStopped();
-    isRecording = false;
+    isRecording_ = false;
+}
+
+void RosbagRecorder::onProcessError(QProcess::ProcessError)
+{
+    const QString err = rosbagProc_ ? rosbagProc_->errorString()
+                                    : tr("Unknown recorder error");
+    emit recordingError(err);
+    rosbagProc_.reset();
+    isRecording_ = false;
 }
 
 void RosbagRecorder::onReadyReadStandardOutput()

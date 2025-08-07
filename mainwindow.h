@@ -4,8 +4,6 @@
 #include <QMainWindow>
 #include <QPushButton>
 #include <QDebug>
-#include <QProcess>
-#include <QTimer>
 #include <QString>
 #include <QMessageBox>
 #include <memory>
@@ -17,6 +15,9 @@
 #include <QStringList>
 #include <QtGlobal> 
 #include <QLabel>
+#include <QSet>
+#include <QCloseEvent>
+#include "scanner_controller.h"
 #include "diagnostics_monitor.h"
 #include "rosbagrecorder.h"
 #ifdef HH_ENABLE_RVIZ
@@ -26,12 +27,6 @@
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
-
-// Every translation unit that includes mainwindow.h needs the QString hash functor's definition, so we place it here
-// One-definition-rule is still not broken because a class/struct definition in a header is allowed to appear in multiple TUs as long as it is identical
-struct QStringHash {
-    std::size_t operator()(const QString &s) const noexcept { return qHash(s); } 
-};
 
 class MainWindow : public QMainWindow
 {
@@ -48,10 +43,12 @@ private slots:
     void startSlam();
     void stopSlam();
 
-    // generic helpers
-    void readDriverOutput();
-    void processCrashed(); 
-    void processFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    //driver feedback
+    void onDriverStarted(const QString& key);
+    void onDriverStopped(const QString& key);
+    void onDriverCrashed(const QString& key);
+    void onDriverOutput(const QString& key, const QString& output);
+
     void onDiagStatus(const QString&, int, const QString&, const QString&);
 
     void onRecordingStarted();
@@ -61,30 +58,13 @@ private slots:
     void showNextPage();
     void showPrevPage();
 private:
-    std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
-                                                  const QString& key);
-    void shutdownProcess(const QString& key);
-    bool killProcessGroup(qint64 pid, int sig, int waitMs); // qint64 is Qt's alias for int64
-    void startRoscore();
-    void stopRoscore();
-    void startCamera();
-    void stopCamera();
-    void startLidar();
-    void stopLidar();
-    void startWatchdog();
-    void stopWatchdog();
-    void handleProcessCrash(const QString& crashedProc);
-    void handleProcessCompletion(const QString& completedProc); 
-    QString findVictimKey(QProcess* proc);
-
     Ui::MainWindow *ui;
-    std::unordered_map<QString, std::unique_ptr<QProcess>, QStringHash> drivers_; 
 #ifdef HH_ENABLE_RVIZ
       std::unique_ptr<RvizWidget> rviz_widget_;
 #endif
-      std::unique_ptr<DiagnosticsMonitor> diag_monitor_;
-      QTimer* rosTimer_;
-      std::unique_ptr<RosbagRecorder> recorder_;
-      QSet<QString> recordTopics_;
+    std::unique_ptr<ScannerController> scanner_;
+    QSet<QString> recordTopics_;
+    bool cameraRunning_ = false;
+    bool lidarRunning_ = false;
 };
 #endif // MAINWINDOW_H

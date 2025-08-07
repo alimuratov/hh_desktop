@@ -17,14 +17,9 @@
 namespace {
     constexpr char kCameraKey[] = "camera";
     constexpr char kLidarKey[] = "lidar";
-    constexpr char kCameraScript[] = "/home/kodifly/setup_scripts/camera_setup.sh";
-    constexpr char kLidarScript[] = "/home/kodifly/setup_scripts/lidar_setup.sh";
-      constexpr char kWatchdogExec[]   = "/home/kodifly/setup_scripts/watchdog_setup.sh";
-      constexpr char kWatchdogKey[]  = "watchdog";
+    constexpr char kWatchdogKey[]  = "watchdog";
     constexpr char kSlamKey[] = "slam";
-    constexpr char kSlamScript[] = "/home/kodifly/setup_scripts/start_slam.sh";
     constexpr char kRoscoreKey[] = "roscore";
-    constexpr char kRoscoreExec[] = "roscore";
 #ifdef HH_ENABLE_RVIZ
       constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
 #endif
@@ -64,10 +59,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->rvizContainer->setVisible(false);
 #endif
 
-    rosTimer_ = new QTimer(this);
-    connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
-    rosTimer_->start(10);
-
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
     connect(ui->startSlamButton, &QPushButton::clicked, this, &MainWindow::startSlam);
@@ -76,187 +67,82 @@ MainWindow::MainWindow(QWidget *parent)
     ui->stopSlamButton->setEnabled(false);
 
     ros::NodeHandle nh;
-    // can sit idle without hurting anything, its subscriber just sleeps until /diagnostics starts flowing 
-    diag_monitor_ = std::make_unique<DiagnosticsMonitor>(nh, this);
-    connect(diag_monitor_.get(), &DiagnosticsMonitor::statusChanged, this, &MainWindow::onDiagStatus);
+
+    scanner_ = std::make_unique<ScannerController>(nh, this);
+
+    // TODO: combine signal-slot connections into a single connect call
+    connect(scanner_.get(), &ScannerController::driverStarted,
+            this, &MainWindow::onDriverStarted);
+    connect(scanner_.get(), &ScannerController::driverStopped,
+            this, &MainWindow::onDriverStopped);
+    connect(scanner_.get(), &ScannerController::driverCrashed,
+            this, &MainWindow::onDriverCrashed);
+    connect(scanner_.get(), &ScannerController::driverOutput,
+            this, &MainWindow::onDriverOutput);
+    connect(scanner_.get(), &ScannerController::diagnosticsUpdated,
+            this, &MainWindow::onDiagStatus);
+    connect(scanner_.get(), &ScannerController::recordingStarted,
+            this, &MainWindow::onRecordingStarted);
+    connect(scanner_.get(), &ScannerController::recordingStopped,
+            this, &MainWindow::onRecordingStopped);
+    connect(scanner_.get(), &ScannerController::recordingError,
+            this, [this](const QString& err){ QMessageBox::warning(this, "Record Warning", err); });
 
     connect(ui->cameraCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_cameraCheckbox_stateChanged);
     connect(ui->lidarCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_lidarCheckbox_stateChanged);
-    recorder_ = std::make_unique<RosbagRecorder>(this);
+
+
     connect(ui->startRecordingButton, &QPushButton::clicked, this, [this] {
-        if (recorder_->getIsRecording()) {
+        if (scanner_->isRecording()) {
             QMessageBox::warning(this, "Record Warning", tr("Stop recording before starting a new one."));
             return;
         } else if (recordTopics_.isEmpty()) {
             QMessageBox::warning(this, "Record Warning", tr("Select at least one topic."));
             return;
         }
-        recorder_->startRecording("my_bag", recordTopics_);
+        
+        QStringList topics = recordTopics_.values();
+        scanner_->startRecording("my_bag", topics);
     });
+
     connect(ui->stopRecordingButton, &QPushButton::clicked,
-            recorder_.get(), &RosbagRecorder::stopRecording);
-    connect(recorder_.get(), &RosbagRecorder::recordingStarted,
-            this, &MainWindow::onRecordingStarted);
-    connect(recorder_.get(), &RosbagRecorder::recordingStopped,
-            this, &MainWindow::onRecordingStopped);
-}
+            scanner_.get(), &ScannerController::stopRecording);
 
 // -------------------------- Buttons --------------------------
 
 void MainWindow::startDrivers()
-{
-    startRoscore();
-    startCamera();
-    startLidar();
-    startWatchdog();
-    if (drivers_.count(kCameraKey) && drivers_.count(kLidarKey)) {
-        ui->startSlamButton->setEnabled(true);
-    }
+{    
+    scanner_->startDrivers();
+    ui->roscoreStatus->setText(tr("Starting..."));
+    // only enable the SLAM button if both camera and lidar drivers are running
+    // TODO 
+    ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
 }
 
 void MainWindow::stopDrivers() {
-    stopSlam();
-    stopCamera();
-    stopLidar();
-    stopWatchdog();
-    stopRoscore();
+    scanner_->stopDrivers();
     ui->startSlamButton->setEnabled(false);
     ui->stopSlamButton->setEnabled(false);
 }
 
-// -------------------------- Driver Utilities --------------------------
-
-void MainWindow::startRoscore() {
-    if (drivers_.count(kRoscoreKey)) return;
-
-    ui->roscoreStatus->setText(tr("Starting..."));
-    auto proc = createDriverProcess(QString::fromUtf8(kRoscoreExec), kRoscoreKey);
-    if (!proc) {
-        ui->roscoreStatus->setText(tr("Failed to start roscore."));
-        ui->roscoreStatus->setStyleSheet("color:red;");
-        return;
-    }
-    ui->roscoreStatus->setText(tr("Running"));
-    ui->roscoreStatus->setStyleSheet("color:green;");
-    drivers_.emplace(kRoscoreKey, std::move(proc));
-}
-
-void MainWindow::stopRoscore() {
-    shutdownProcess(kRoscoreKey);
-    ui->roscoreStatus->setText(tr("Roscore stopped."));
-    ui->roscoreStatus->setStyleSheet("");
-}
-
-void MainWindow::startCamera() {
-    // if the camera driver is already running
-    if (drivers_.count(kCameraKey)) return;
-
-    auto proc = createDriverProcess(kCameraScript, kCameraKey);
-    if (!proc) return;
-    drivers_.emplace(kCameraKey, std::move(proc)); 
-}
-
-void MainWindow::stopCamera() {
-    shutdownProcess(kCameraKey); 
-    ui->cameraStatus->setText(tr("Camera driver stopped."));
-    ui->cameraStatus->setStyleSheet("");
-} 
-
-void MainWindow::startLidar() {
-    if (drivers_.count(kLidarKey)) return;
-
-    auto proc = createDriverProcess(kLidarScript, kLidarKey);
-    if (!proc) return;
-    drivers_.emplace(kLidarKey, std::move(proc)); 
-}
-
-void MainWindow::stopLidar() {
-    shutdownProcess(kLidarKey);
-    ui->lidarStatus->setText(tr("Lidar driver stopped."));
-    ui->lidarStatus->setStyleSheet("");
-}
-
-void MainWindow::startWatchdog() {
-    if (drivers_.count(kWatchdogKey)) return;
-    auto proc = std::make_unique<QProcess>(this);
-    proc->setProcessChannelMode(QProcess::MergedChannels);
-
-    const QString program("/usr/bin/setsid");
-    const QStringList args {QString::fromUtf8(kWatchdogExec)};
-
-    connect(proc.get(), &QProcess::started, this, [p = proc.get()]{
-        qDebug() << "watchdog PID=" << p->processId();
-    });
-    connect(proc.get(), &QProcess::readyReadStandardOutput, this, &MainWindow::readDriverOutput);
-    connect(proc.get(), &QProcess::errorOccurred, this, &MainWindow::processCrashed);
-    connect(proc.get(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, &MainWindow::processFinished);
-
-    proc->start(program, args);
-    if (!proc->waitForStarted()) {
-        QMessageBox::critical(this, tr("Failed to start"), tr("watchdog node could not be launched"));
-        return;
-    }
-    drivers_.emplace(kWatchdogKey, std::move(proc));
-}
-
-void MainWindow::stopWatchdog() {
-    shutdownProcess(kWatchdogKey);
-}
-
 void MainWindow::startSlam() {
-    if (drivers_.count(kSlamKey)) return;
-
-    auto proc = createDriverProcess(kSlamScript, kSlamKey);
-    if (!proc) return;
-    drivers_.emplace(kSlamKey, std::move(proc));
+    scanner_->startSlam();
     ui->startSlamButton->setEnabled(false);
     ui->stopSlamButton->setEnabled(true);
 }
 
 void MainWindow::stopSlam() {
-    shutdownProcess(kSlamKey);
+    scanner_->stopSlam();
     ui->stopSlamButton->setEnabled(false);
     ui->startSlamButton->setEnabled(drivers_.count(kCameraKey) && drivers_.count(kLidarKey));
-}
-
-// -------------------------- Process Factory --------------------------
-
-std::unique_ptr<QProcess> MainWindow::createDriverProcess(const QString& scriptPath, const QString& key) {
-    auto proc = std::make_unique<QProcess>(this);
-    // tells QProcess to merge the child's stdout and stderr streams into a single channel before the process starts
-    // with the default SeparateChannels mode you would need two different ready-read signals or two reads to catch everything the script prints 
-    proc->setProcessChannelMode(QProcess::MergedChannels); // stderr + stdout together
-
-    // running the script through setsid makes it the leader of a new process group
-    // every ROS node it spawns inherits the same PGID, which lets us alter kill the whole tree with killpg() 
-    const QString program("/usr/bin/setsid");
-    const QStringList args {"/bin/bash", "-c", QStringLiteral("exec %1").arg(scriptPath)};
-
-    // readyReadStandardOutput() is a signal that merely tells us "new bytes have arrived"
-    connect(proc.get(), &QProcess::started, this, [this, key, p = proc.get()]{
-        qDebug() << key << " PID=" << p->processId();
-    });
-    connect(proc.get(), &QProcess::readyReadStandardOutput, this, &MainWindow::readDriverOutput);
-    connect(proc.get(), &QProcess::errorOccurred, this, &MainWindow::processCrashed);
-    connect(proc.get(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-            this, &MainWindow::processFinished); 
-
-    proc->start(program, args);
-    // blocks the calling thead until the child process has actually been forked 
-    // it then eturns true if the QProcess state became Running, otherwise false 
-    if (!proc->waitForStarted()) {
-        QMessageBox::critical(this, tr("Failed to start"),
-                              tr("%1 driver could not be launched").arg(key)); 
-        return nullptr;
-    }
-    return proc; 
+    ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
 }
 
 // -------------------------- Diagnostics --------------------------
 
 void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg, const QString &recordedFrequency) {
     qDebug() << "Name: " << name << " Level: " << level << " Message: " << msg;
-    // severity levels
+
     const QString sev = (level == 0) ? "OK"
                        : (level == 1) ? "WARN"
                        : (level == 2) ? "ERROR"
@@ -274,130 +160,63 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
     targetLabel->setText(tr("%1: %2").arg(sev, msg ));
     targetLabel->setStyleSheet(QStringLiteral("color:%1;")
                                .arg(levelToColor(level).name()));
-
-    // if (level >= 2) { // ERROR ‑ pop up.
-    //  QMessageBox::critical(this, tr("Watchdog"),
-    //                         tr("%1 driver reported %2\n%3").arg(name, sev, msg));
-    // }
   }
 
 
-// -------------------------- Generic Slots --------------------------
+// -------------------------- Driver Slots --------------------------
+void MainWindow::onDriverOutput(const QString& /*key*/, const QString& output) {
+    qDebug().noquote() << output;
+}   
 
-void MainWindow::readDriverOutput() {
-    auto* senderProc = qobject_cast<QProcess*>(sender());
-    if (!senderProc) return;
-    const QString text = QString::fromUtf8(senderProc->readAllStandardOutput());
-    qDebug().noquote() << text; 
-}
-
-void MainWindow::processCrashed() {
-    // if you drop the asterisk here, the deduced type is still QProcess*, so the program works
-    // but the declartion would look as if senderProc might be an object rather than a pointer 
-    auto* senderProc = qobject_cast<QProcess*>(sender()); 
-    if (!senderProc) return; 
-    QString victimKey = findVictimKey(senderProc);
-    if (!victimKey.isEmpty()) {
-        handleProcessCrash(victimKey);
+void MainWindow::onDriverStarted(const QString& key) {
+    if (key == kRoscoreKey) {
+        ui->roscoreStatus->setText(tr("Running"));
+        ui->roscoreStatus->setStyleSheet("color:green;");
+    } else if (key == kCameraKey) {
+        cameraRunning_ = true;
+        if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
+    } else if (key == kLidarKey) {
+        lidarRunning_ = true;
+        if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
+    } else if (key == kSlamKey) {
+        ui->stopSlamButton->setEnabled(true);
     }
 }
 
-// not a slot, but a private method that handles process crashes
-void MainWindow::handleProcessCrash(const QString& crashedProc) {
-    shutdownProcess(crashedProc);
-    QMessageBox::warning(this, "Process Failure", tr("%1 has stopped running.").arg(crashedProc));
-    if (crashedProc == kSlamKey) {
-        ui->stopSlamButton->setEnabled(false);
-        ui->startSlamButton->setEnabled(drivers_.count(kCameraKey) && drivers_.count(kLidarKey));
-    } else if (crashedProc == kCameraKey || crashedProc == kLidarKey) {
-        stopSlam();
-        ui->startSlamButton->setEnabled(false);
-    } else if (crashedProc == kRoscoreKey) {
-        ui->roscoreStatus->setText(tr("Roscore crashed."));
-        ui->roscoreStatus->setStyleSheet("color:red;");
-    }
-}
-
-void MainWindow::processFinished(int exitCode, QProcess::ExitStatus exitStatus) {
-    auto* senderProc = qobject_cast<QProcess*>(sender()); 
-    if (!senderProc) return; 
-    QString victimKey = findVictimKey(senderProc);
-    if (victimKey.isEmpty()) {
-        return; 
-    }
-    if (exitStatus == QProcess::CrashExit) {
-        handleProcessCrash(victimKey);
-        return; 
-    }
-
-    handleProcessCompletion(victimKey);
-}
-
-// not a slot as well 
-void MainWindow::handleProcessCompletion(const QString& completedProc) {
-    shutdownProcess(completedProc);
-    QMessageBox::information(this, "Process Completion", tr("%1 has finished.").arg(completedProc));
-    if (completedProc == kSlamKey) {
-        ui->stopSlamButton->setEnabled(false);
-        ui->startSlamButton->setEnabled(drivers_.count(kCameraKey) && drivers_.count(kLidarKey));
-    } else if (completedProc == kCameraKey || completedProc == kLidarKey) {
-        stopSlam();
-        ui->startSlamButton->setEnabled(false);
-    } else if (completedProc == kRoscoreKey) {
+void MainWindow::onDriverStopped(const QString& key) {
+    if (key == kRoscoreKey) {
         ui->roscoreStatus->setText(tr("Roscore stopped."));
         ui->roscoreStatus->setStyleSheet("");
+    } else if (key == kCameraKey) {
+        cameraRunning_ = false;
+        ui->cameraStatus->setText(tr("Camera driver stopped."));
+        ui->cameraStatus->setStyleSheet("");
+        ui->startSlamButton->setEnabled(false);
+    } else if (key == kLidarKey) {
+        lidarRunning_ = false;
+        ui->lidarStatus->setText(tr("Lidar driver stopped."));
+        ui->lidarStatus->setStyleSheet("");
+        ui->startSlamButton->setEnabled(false);
+    } else if (key == kSlamKey) {
+        ui->stopSlamButton->setEnabled(false);
+        ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
     }
  }
 
-QString MainWindow::findVictimKey(QProcess* proc) {
-    for (const auto& pair : drivers_) {
-        if (pair.second.get() == proc) {
-            return pair.first; 
-        }
+ void MainWindow::onDriverCrashed(const QString& key) {
+    QMessageBox::warning(this, "Process Failure", tr("%1 has stopped running.").arg(key));
+    if (key == kRoscoreKey) {
+        ui->roscoreStatus->setText(tr("Roscore crashed."));
+        ui->roscoreStatus->setStyleSheet("color:red;");
+    } if (key == kCameraKey || key == kLidarKey) {
+        ui->startSlamButton->setEnabled(false);
     }
-    return QString(); // not found
-}
-
-// -------------------------- Shutdown Helpers --------------------------
-
-void MainWindow::shutdownProcess(const QString& key) {
-    auto it = drivers_.find(key);
-    if (it == drivers_.end()) return; 
-
-    const qint64 pid = it->second->processId();
-
-    if (!killProcessGroup(pid, SIGINT, 2000) && !killProcessGroup(pid, SIGTERM, 2000)) {
-        killProcessGroup(pid, SIGKILL, 0);
-    }
-
-    drivers_.erase(it); 
-}
-
-bool MainWindow::killProcessGroup(qint64 pid, int sig, int waitMs) {
-    if (pid <= 0) return true;
-
-    ::kill(-pid, sig); // only sends a signal SIGTERM (doesn't wait for the processes in that group to act on it)
-    if (waitMs == 0) {
-        return false; 
-    }
-
-    const qint64 t0 = QDateTime::currentMSecsSinceEpoch();
-    while (QDateTime::currentMSecsSinceEpoch() - t0 < waitMs) {
-        // ::kill(pid, 0) is a POSIX "probe": it delivers no signal but reutrns 0 if the process still exists
-        if (::kill(pid, 0) == -1 && errno == ESRCH) return true;
-        QThread::msleep(50); // suspend the current thread
-    }
-    return false; 
-}
-
+ }
+ 
 // -------------------------- closeEvent --------------------------
 
 void MainWindow::closeEvent(QCloseEvent* event) {
-    for (auto it = drivers_.begin(); it != drivers_.end(); ) {
-        const QString key = it->first;
-        ++it;
-        shutdownProcess(key);
-    }
+    scanner_->stopDrivers();
     QMainWindow::closeEvent(event);
 }
 
