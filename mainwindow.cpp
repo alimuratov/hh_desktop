@@ -77,6 +77,10 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::onDriverStopped);
     connect(scanner_.get(), &ScannerController::driverCrashed,
             this, &MainWindow::onDriverCrashed);
+    connect(scanner_.get(), &ScannerController::driverError,
+            this, [this](const QString& key, const QString& error) {
+        QMessageBox::warning(this, "Driver Error", QString("%1: %2").arg(key, error));
+    });
     connect(scanner_.get(), &ScannerController::driverOutput,
             this, &MainWindow::onDriverOutput);
     connect(scanner_.get(), &ScannerController::diagnosticsUpdated,
@@ -134,7 +138,6 @@ void MainWindow::startSlam() {
 void MainWindow::stopSlam() {
     scanner_->stopSlam();
     ui->stopSlamButton->setEnabled(false);
-    ui->startSlamButton->setEnabled(drivers_.count(kCameraKey) && drivers_.count(kLidarKey));
     ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
 }
 
@@ -208,7 +211,7 @@ void MainWindow::onDriverStopped(const QString& key) {
     if (key == kRoscoreKey) {
         ui->roscoreStatus->setText(tr("Roscore crashed."));
         ui->roscoreStatus->setStyleSheet("color:red;");
-    } if (key == kCameraKey || key == kLidarKey) {
+    } else if (key == kCameraKey || key == kLidarKey) {
         ui->startSlamButton->setEnabled(false);
     }
  }

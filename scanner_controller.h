@@ -9,6 +9,9 @@
 #include "rosbagrecorder.h"
 #include "diagnostics_monitor.h"
 
+// Forward declaration
+struct ProcessConfig;
+
 // hash functor for QString to use with std::unordered_map
 struct QStringHash {
     std::size_t operator()(const QString &s) const noexcept { return qHash(s); }
@@ -54,9 +57,12 @@ private:
     DriverMap drivers_;
     QTimer* rosTimer_;
 
+    // Generic process control
+    void startProcess(const QString& key);
+    void stopProcess(const QString& key);
+
     // helpers
-    std::unique_ptr<QProcess> createDriverProcess(const QString& scriptPath,
-                                                  const QString& key);
+    std::unique_ptr<QProcess> createDriverProcess(const ProcessConfig& config);
     void shutdownProcess(const QString& key);
     bool killProcessGroup(qint64 pid, int sig, int waitMs);
     QString findVictimKey(QProcess* proc);

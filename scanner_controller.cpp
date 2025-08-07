@@ -1,23 +1,10 @@
 #include "scanner_controller.h"
-
+#include "process_config.h"
 #include <QDateTime>
 #include <QThread>
 #include <QDebug>
 #include <errno.h>
 #include <signal.h>
-
-namespace {
-    constexpr char kCameraKey[]    = "camera";
-    constexpr char kLidarKey[]     = "lidar";
-    constexpr char kCameraScript[] = "/home/kodifly/setup_scripts/camera_setup.sh";
-    constexpr char kLidarScript[]  = "/home/kodifly/setup_scripts/lidar_setup.sh";
-    constexpr char kWatchdogExec[] = "/home/kodifly/setup_scripts/watchdog_setup.sh";
-    constexpr char kWatchdogKey[]  = "watchdog";
-    constexpr char kSlamKey[]      = "slam";
-    constexpr char kSlamScript[]   = "/home/kodifly/setup_scripts/start_slam.sh";
-    constexpr char kRoscoreKey[]   = "roscore";
-    constexpr char kRoscoreExec[]  = "roscore";
-}
 
 
 ScannerController::ScannerController(ros::NodeHandle& nh, QObject* parent)
@@ -65,41 +52,52 @@ bool ScannerController::isRecording() const {
 // -------------------------- Driver control --------------------------
 
 void ScannerController::startDrivers() {
-    startProcess(kRoscoreKey, kRoscoreExec);
+    startProcess("roscore");
     
-    // Wait for roscore to initialize
+    // Wait for roscore to initialize - this could also be moved to ProcessConfig
     QThread::msleep(1000);
     
-    startProcess(kCameraKey, kCameraScript);
-    startProcess(kLidarKey, kLidarScript);
-    startProcess(kWatchdogKey, kWatchdogExec);
+    startProcess("camera");
+    startProcess("lidar");
+    startProcess("watchdog");
 }
 
 void ScannerController::stopDrivers() {
-    stopProcess(kSlamKey);
-    stopProcess(kWatchdogKey);
-    stopProcess(kLidarKey);
-    stopProcess(kCameraKey);
-    stopProcess(kRoscoreKey);
+    stopProcess("slam");
+    stopProcess("watchdog");
+    stopProcess("lidar");
+    stopProcess("camera");
+    stopProcess("roscore");
 }
 
 void ScannerController::startSlam() {
-    startProcess(kSlamKey, kSlamScript);
+    startProcess("slam");
 }
 
-void ScannerController::stopSlam() { stopProcess(kSlamKey); }
+void ScannerController::stopSlam() { 
+    stopProcess("slam"); 
+}
 
 // -------------------------- process helpers --------------------------
 
-std::unique_ptr<QProcess> ScannerController::createDriverProcess(const QString& scriptPath,
-                                                                const QString& key) {
+std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessConfig& config) {
     auto proc = std::make_unique<QProcess>(this);
     proc->setProcessChannelMode(QProcess::MergedChannels);
 
     const QString program("/usr/bin/setsid");
-    const QStringList args {"/bin/bash", "-c", QStringLiteral("exec %1").arg(scriptPath)};
+    QStringList args;
+    
+    // Handle different execution modes based on arguments
+    if (config.arguments.isEmpty()) {
+        // For simple executables or scripts, use exec
+        args = {"/bin/bash", "-c", QStringLiteral("exec %1").arg(config.executable)};
+    } else {
+        // For executables with arguments, construct proper command
+        QString fullCommand = config.executable + " " + config.arguments.join(" ");
+        args = {"/bin/bash", "-c", QStringLiteral("exec %1").arg(fullCommand)};
+    }
 
-    connect(proc.get(), &QProcess::started, this, [this, key, p = proc.get()] {
+    connect(proc.get(), &QProcess::started, this, [this, key = config.key, p = proc.get()] {
         qDebug() << key << " PID=" << p->processId();
         emit driverStarted(key);
     });
@@ -112,27 +110,43 @@ std::unique_ptr<QProcess> ScannerController::createDriverProcess(const QString& 
 
     proc->start(program, args);
     if (!proc->waitForStarted()) {
-        emit driverCrashed(key);
+        emit driverCrashed(config.key);
         return nullptr;
     }
     return proc;
 }
 
-void ScannerController::startProcess(const QString& key, const QString& scriptPath) {
+void ScannerController::startProcess(const QString& key) {
     if (drivers_.count(key)) return;
     
-    // Special handling for SLAM - check prerequisites before starting
-    if (key == kSlamKey) {
-        if (!drivers_.count(kCameraKey) || !drivers_.count(kLidarKey)) {
-            qDebug() << "Cannot start SLAM without camera and lidar";
-            emit driverError(key, "Cannot start SLAM without camera and lidar running");
-            return;
-        }
+    const ProcessConfig* config = ProcessRegistry::instance().getProcess(key);
+    if (!config) {
+        emit driverError(key, QString("Unknown process: %1").arg(key));
+        return;
+    }
+
+    std::unordered_map<QString, bool> runningProcesses;
+    for (const auto& [k, _] : drivers_) {
+        runningProcesses[k] = true;
+    }
+
+    if (!config->canStart(runningProcesses)) {
+        emit driverError(key, QString("%1 prerequisites not met").arg(config->name));
+        return;
+    }
+
+    auto proc = createDriverProcess(*config);
+    if (!proc) {
+        emit driverError(key, QString("Failed to start %1").arg(config->name));
+        return;
     }
     
-    auto proc = createDriverProcess(scriptPath, key);
-    if (!proc) return;
     drivers_.emplace(key, std::move(proc));
+    
+    // Handle startup delay if configured
+    if (config->startupDelayMs > 0) {
+        QThread::msleep(config->startupDelayMs);
+    }
 }
 
 void ScannerController::stopProcess(const QString& key) {
@@ -178,19 +192,26 @@ void ScannerController::processFinished(int exitCode, QProcess::ExitStatus exitS
 void ScannerController::handleProcessCrash(const QString& crashedProc) {
     shutdownProcess(crashedProc);
     emit driverCrashed(crashedProc);
-    if (crashedProc == kCameraKey || crashedProc == kLidarKey) {
+    
+    // Handle dependencies - if camera or lidar crashes, stop SLAM
+    if (crashedProc == "camera" || crashedProc == "lidar") {
         stopSlam();
-    } else if (crashedProc == kSlamKey) {
-        // nothing extra
-    } else if (crashedProc == kRoscoreKey) {
-        // nothing extra
+    }
+    
+    // If critical process crashed (like roscore), could stop everything
+    const ProcessConfig* config = ProcessRegistry::instance().getProcess(crashedProc);
+    if (config && config->critical) {
+        qDebug() << "Critical process" << crashedProc << "crashed, stopping all drivers";
+        stopDrivers();
     }
 }
 
 void ScannerController::handleProcessCompletion(const QString& completedProc) {
     shutdownProcess(completedProc);
     emit driverStopped(completedProc);
-    if (completedProc == kCameraKey || completedProc == kLidarKey) {
+    
+    // Handle dependencies
+    if (completedProc == "camera" || completedProc == "lidar") {
         stopSlam();
     }
 }
