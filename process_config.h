@@ -50,63 +50,67 @@ private:
 // Initialize all process definitions
 inline void initializeProcesses() {
     auto& registry = ProcessRegistry::instance();
-    
+
     // Roscore
     registry.registerProcess({
-        .key = "roscore",
-        .name = "ROS Core",
-        .executable = "/usr/bin/roscore",
-        .arguments = {},
-        .canStart = [](const auto&) { return true; },  // Always can start
-        .startupDelayMs = 1000,
-        .critical = true
+        "roscore",
+        "ROS Core",
+        "/usr/bin/roscore",
+        {},
+        [](const auto&) { return true; },  // Always can start
+        1000,
+        true
     });
-    
+
     // Camera
     registry.registerProcess({
-        .key = "camera",
-        .name = "Camera Driver",
-        .executable = "/home/kodifly/setup_scripts/camera_setup.sh",
-        .arguments = {},
-        .canStart = [](const auto& running) { 
-            return running.count("roscore") > 0; 
+        "camera",
+        "Camera Driver",
+        "/home/kodifly/setup_scripts/camera_setup.sh",
+        {},
+        [](const auto& running) {
+            return running.count("roscore") > 0;
         },
-        .critical = false
+        0,
+        false
     });
-    
+
     // Lidar
     registry.registerProcess({
-        .key = "lidar",
-        .name = "Lidar Driver",
-        .executable = "/home/kodifly/setup_scripts/lidar_setup.sh",
-        .arguments = {},
-        .canStart = [](const auto& running) { 
-            return running.count("roscore") > 0; 
+        "lidar",
+        "Lidar Driver",
+        "/home/kodifly/setup_scripts/lidar_setup.sh",
+        {},
+        [](const auto& running) {
+            return running.count("roscore") > 0;
         },
-        .critical = false
+        0,
+        false
     });
-    
+
     // SLAM
     registry.registerProcess({
-        .key = "slam",
-        .name = "SLAM",
-        .executable = "/home/kodifly/setup_scripts/start_slam.sh",
-        .arguments = {},
-        .canStart = [](const auto& running) { 
-            return running.count("camera") > 0 && running.count("lidar") > 0; 
+        "slam",
+        "SLAM",
+        "/home/kodifly/setup_scripts/start_slam.sh",
+        {},
+        [](const auto& running) {
+            return running.count("camera") > 0 && running.count("lidar") > 0;
         },
-        .critical = false
+        0,
+        false
     });
-    
+
     // Watchdog
     registry.registerProcess({
-        .key = "watchdog",
-        .name = "Watchdog",
-        .executable = "/home/kodifly/setup_scripts/watchdog_setup.sh",
-        .arguments = {},
-        .canStart = [](const auto& running) { 
-            return running.count("roscore") > 0; 
+        "watchdog",
+        "Watchdog",
+        "/home/kodifly/setup_scripts/watchdog_setup.sh",
+        {},
+        [](const auto& running) {
+            return running.count("roscore") > 0;
         },
-        .critical = false
+        0,
+        false
     });
 }

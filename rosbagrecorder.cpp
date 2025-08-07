@@ -24,7 +24,7 @@ RosbagRecorder::~RosbagRecorder()
 
 
 void RosbagRecorder::startRecording(const QString &bagName,
-                                    const QSet<QString> &topics)
+                                    const QStringList &topics)
 {
     if (rosbagProc_) {
         qWarning() << "rosbag recorder already running";
@@ -36,11 +36,9 @@ void RosbagRecorder::startRecording(const QString &bagName,
     rosbagProc_->setWorkingDirectory(QDir::homePath() + "/rosbags");
     qDebug() << "Directory set to:" << rosbagProc_->workingDirectory();
 
-    QStringList topicList = topics.values();
-
     const QString program("/usr/bin/setsid");
     QString cmd = QStringLiteral("exec rosbag record -O %1 --lz4 --tcpnodelay %2")
-                       .arg(bagName, topicList.join(' '));
+                       .arg(bagName, topics.join(' '));
     const QStringList args{"/bin/bash", "-c", cmd};
  
 
@@ -57,8 +55,6 @@ void RosbagRecorder::startRecording(const QString &bagName,
 
     rosbagProc_->start(program, args);
     if (!rosbagProc_->waitForStarted()) {
-        QMessageBox::critical(nullptr, tr("Failed to start"),
-                              tr("rosbag record could not be launched"));
         const QString err = tr("rosbag record could not be launched");
         QMessageBox::critical(nullptr, tr("Failed to start"), err);
         emit recordingError(err);
