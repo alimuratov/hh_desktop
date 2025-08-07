@@ -4,6 +4,8 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <vector>
+#include "qstring_hash.h"
 
 // Process definition structure
 struct ProcessConfig {
@@ -12,7 +14,7 @@ struct ProcessConfig {
     QString executable;
     QStringList arguments;
     // Check if the process can start based on currently running processes
-    std::function<bool(const std::unordered_map<QString, bool>&)> canStart;
+    std::function<bool(const std::unordered_map<QString, bool, QStringHash>&)> canStart;
     int startupDelayMs = 0;
     bool critical = false;  // If true, crash will stop all processes
 };
@@ -44,7 +46,9 @@ public:
     
 private:
     ProcessRegistry() = default;
-    std::unordered_map<QString, ProcessConfig> processes_;
+    ProcessRegistry(const ProcessRegistry&) = delete;
+    ProcessRegistry& operator=(const ProcessRegistry&) = delete;
+    std::unordered_map<QString, ProcessConfig, QStringHash> processes_;
 };
 
 // Initialize all process definitions
@@ -111,6 +115,19 @@ inline void initializeProcesses() {
             return running.count("roscore") > 0;
         },
         0,
+        false
+    });
+
+    // Dynamic Reconfigure
+    registry.registerProcess({
+        "dynamic_reconfigure",
+        "Dynamic Reconfigure",
+        "/home/kodifly/setup_scripts/dynamic_reconfigure_setup.sh",
+        {},
+        [](const auto& running) {
+            return running.count("camera") > 0;
+        },
+        500,  // Small delay to ensure camera is ready
         false
     });
 }

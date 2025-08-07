@@ -2,7 +2,7 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++14 link_pkgconfig
+CONFIG += c++14 link_pkgconfig rviz
 PKGCONFIG += roscpp sensor_msgs diagnostic_updater
 
 contains(CONFIG, rviz) {
@@ -35,12 +35,18 @@ INCLUDEPATH += $${ROS_WS}/include
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    rosbagrecorder.cpp
+    rosbagrecorder.cpp \
+    scanner_controller.cpp
 
 HEADERS += \
     mainwindow.h \
     diagnostics_monitor.h \
-    rosbagrecorder.h
+    rosbagrecorder.h \
+    scanner_controller.h \
+    process_config.h \
+    qstring_hash.h \
+    config.h \
+    result.h
 
 FORMS += \
     mainwindow.ui

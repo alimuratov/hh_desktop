@@ -8,14 +8,10 @@
 #include <QStringList>
 #include "rosbagrecorder.h"
 #include "diagnostics_monitor.h"
+#include "qstring_hash.h"
 
 // Forward declaration
 struct ProcessConfig;
-
-// hash functor for QString to use with std::unordered_map
-struct QStringHash {
-    std::size_t operator()(const QString &s) const noexcept { return qHash(s); }
-};
 
 class ScannerController : public QObject {
     Q_OBJECT
@@ -32,6 +28,8 @@ public:
     void stopDrivers();
     void startSlam();
     void stopSlam();
+    void startDynamicReconfigure();
+    void stopDynamicReconfigure();
 
     
 signals:

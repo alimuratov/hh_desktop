@@ -20,6 +20,7 @@ namespace {
     constexpr char kWatchdogKey[]  = "watchdog";
     constexpr char kSlamKey[] = "slam";
     constexpr char kRoscoreKey[] = "roscore";
+    constexpr char kDynamicReconfigureKey[] = "dynamic_reconfigure";
 #ifdef HH_ENABLE_RVIZ
       constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
 #endif
@@ -63,8 +64,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
     connect(ui->startSlamButton, &QPushButton::clicked, this, &MainWindow::startSlam);
     connect(ui->stopSlamButton, &QPushButton::clicked, this, &MainWindow::stopSlam);
+    connect(ui->startDynamicReconfigureButton, &QPushButton::clicked, this, &MainWindow::startDynamicReconfigure);
+    connect(ui->stopDynamicReconfigureButton, &QPushButton::clicked, this, &MainWindow::stopDynamicReconfigure);
     ui->startSlamButton->setEnabled(false);
     ui->stopSlamButton->setEnabled(false);
+    ui->startDynamicReconfigureButton->setEnabled(false);
+    ui->stopDynamicReconfigureButton->setEnabled(false);
 
     ros::NodeHandle nh;
 
@@ -111,6 +116,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->stopRecordingButton, &QPushButton::clicked,
             scanner_.get(), &ScannerController::stopRecording);
+}
 
 // -------------------------- Buttons --------------------------
 
@@ -139,6 +145,18 @@ void MainWindow::stopSlam() {
     scanner_->stopSlam();
     ui->stopSlamButton->setEnabled(false);
     ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
+}
+
+void MainWindow::startDynamicReconfigure() {
+    scanner_->startDynamicReconfigure();
+    ui->startDynamicReconfigureButton->setEnabled(false);
+    ui->stopDynamicReconfigureButton->setEnabled(true);
+}
+
+void MainWindow::stopDynamicReconfigure() {
+    scanner_->stopDynamicReconfigure();
+    ui->stopDynamicReconfigureButton->setEnabled(false);
+    ui->startDynamicReconfigureButton->setEnabled(cameraRunning_);
 }
 
 // -------------------------- Diagnostics --------------------------
@@ -178,11 +196,15 @@ void MainWindow::onDriverStarted(const QString& key) {
     } else if (key == kCameraKey) {
         cameraRunning_ = true;
         if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
+        ui->startDynamicReconfigureButton->setEnabled(true);
     } else if (key == kLidarKey) {
         lidarRunning_ = true;
         if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
     } else if (key == kSlamKey) {
         ui->stopSlamButton->setEnabled(true);
+    } else if (key == kDynamicReconfigureKey) {
+        ui->startDynamicReconfigureButton->setEnabled(false);
+        ui->stopDynamicReconfigureButton->setEnabled(true);
     }
 }
 
@@ -195,6 +217,7 @@ void MainWindow::onDriverStopped(const QString& key) {
         ui->cameraStatus->setText(tr("Camera driver stopped."));
         ui->cameraStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
+        ui->startDynamicReconfigureButton->setEnabled(false);
     } else if (key == kLidarKey) {
         lidarRunning_ = false;
         ui->lidarStatus->setText(tr("Lidar driver stopped."));
@@ -203,6 +226,9 @@ void MainWindow::onDriverStopped(const QString& key) {
     } else if (key == kSlamKey) {
         ui->stopSlamButton->setEnabled(false);
         ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
+    } else if (key == kDynamicReconfigureKey) {
+        ui->stopDynamicReconfigureButton->setEnabled(false);
+        ui->startDynamicReconfigureButton->setEnabled(cameraRunning_);
     }
  }
 

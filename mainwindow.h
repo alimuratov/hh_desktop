@@ -42,6 +42,8 @@ private slots:
     void stopDrivers();
     void startSlam();
     void stopSlam();
+    void startDynamicReconfigure();
+    void stopDynamicReconfigure();
 
     //driver feedback
     void onDriverStarted(const QString& key);
