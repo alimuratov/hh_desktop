@@ -74,6 +74,7 @@ void ScannerController::stopDrivers() {
     stopProcess("lidar");
     stopProcess("camera");
     stopProcess("roscore");
+    stopProcess("gps_rtk");
 }
 
 void ScannerController::startSlam() {

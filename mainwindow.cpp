@@ -18,6 +18,7 @@ namespace {
     constexpr char kCameraKey[] = "camera";
     constexpr char kLidarKey[] = "lidar";
     constexpr char kWatchdogKey[]  = "watchdog";
+    constexpr char kGpsRtkKey[] = "gps_rtk"; // GPS RTK driver
     constexpr char kSlamKey[] = "slam";
     constexpr char kRoscoreKey[] = "roscore";
     constexpr char kDynamicReconfigureKey[] = "dynamic_reconfigure";
