@@ -92,6 +92,19 @@ inline void initializeProcesses() {
         false
     });
 
+    // gps rtk
+    registry.registerProcess({
+        "gps_rtk",
+        "GPS RTK Driver",
+        "/home/kodifly/setup_scripts/gps_rtk_setup.sh",
+        {},
+        [](const auto& running) {
+            return running.count("roscore") > 0;
+        },
+        0,
+        false
+    });
+
     // SLAM
     registry.registerProcess({
         "slam",
