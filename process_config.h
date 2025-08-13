@@ -99,7 +99,7 @@ inline void initializeProcesses() {
         "/home/kodifly/setup_scripts/gps_rtk_setup.sh",
         {},
         [](const auto& running) {
-            return running.count("roscore") > 0;
+            return running.count("roscore") > 0; //fix logic
         },
         0,
         false
