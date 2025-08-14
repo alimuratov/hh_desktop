@@ -271,6 +271,16 @@ void MainWindow::on_lidarCheckbox_stateChanged(int checked)
     }
 }
 
+void MainWindow::on_gpsCheckbox_stateChanged(int checked)
+{
+    if (checked == 0) {
+        recordTopics_.remove("/gps/fix");
+    } else if (checked == 2) {
+        recordTopics_ << "/gps/fix";
+    }
+}
+
+
 void MainWindow::onRecordingStarted() {
     ui->recordStatus->setText("Recording...");
 }

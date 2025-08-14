@@ -57,6 +57,7 @@ private slots:
     void onRecordingStopped();
     void on_cameraCheckbox_stateChanged(int checked);
     void on_lidarCheckbox_stateChanged(int checked);
+    void on_gpsCheckbox_stateChanged(int checked);
     void showNextPage();
     void showPrevPage();
 private:
