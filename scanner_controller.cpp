@@ -61,7 +61,7 @@ void ScannerController::startDrivers() {
     startProcess("lidar");
     startProcess("watchdog");
     // add another process
-    startProcess("gps_rtk")
+    startProcess("gps_rtk");
     // Start dynamic_reconfigure after camera is ready
     // The dependency is handled in process_config.h
     startProcess("dynamic_reconfigure");
