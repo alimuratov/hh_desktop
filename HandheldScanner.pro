@@ -37,6 +37,7 @@ SOURCES += \
     mainwindow.cpp \
     rosbagrecorder.cpp \
     scanner_controller.cpp
+    mapvizwidget.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -47,6 +48,7 @@ HEADERS += \
     qstring_hash.h \
     config.h \
     result.h
+    mapvizwidget.h
 
 FORMS += \
     mainwindow.ui

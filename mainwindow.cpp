@@ -61,6 +61,14 @@ MainWindow::MainWindow(QWidget *parent)
     ui->rvizContainer->setVisible(false);
 #endif
 
+        // Add MapvizWidget to location page
+        constexpr char kMapvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz"; // Change to your mapviz config path if needed
+        mapviz_widget_ = std::make_unique<MapvizWidget>(QString::fromUtf8(kMapvizConfig), this);
+        QVBoxLayout* mapvizLayout = new QVBoxLayout(ui->locationTitleLabel->parentWidget());
+        mapvizLayout->setContentsMargins(0, 0, 0, 0);
+        mapvizLayout->addWidget(mapviz_widget_.get());
+        ui->locationTitleLabel->setVisible(false);
+
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
     connect(ui->startSlamButton, &QPushButton::clicked, this, &MainWindow::startSlam);

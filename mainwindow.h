@@ -24,6 +24,8 @@
 #include "rvizwidget.h"
 #endif
 
+#include "mapvizwidget.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -65,6 +67,7 @@ private:
 #ifdef HH_ENABLE_RVIZ
       std::unique_ptr<RvizWidget> rviz_widget_;
 #endif
+    std::unique_ptr<MapvizWidget> mapviz_widget_;
     std::unique_ptr<ScannerController> scanner_;
     QSet<QString> recordTopics_;
     bool cameraRunning_ = false;
