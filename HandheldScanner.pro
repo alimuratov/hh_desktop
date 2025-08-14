@@ -45,7 +45,6 @@ HEADERS += \
     scanner_controller.h \
     process_config.h \
     qstring_hash.h \
-    modern_style.h \
     config.h \
     result.h
 

@@ -89,9 +89,7 @@ void ScannerController::startDynamicReconfigure() {
 
 void ScannerController::stopDynamicReconfigure() {
     stopProcess("dynamic_reconfigure");
-}
-
-// -------------------------- process helpers --------------------------
+}// -------------------------- process helpers --------------------------
 
 std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessConfig& config) {
     auto proc = std::make_unique<QProcess>(this);

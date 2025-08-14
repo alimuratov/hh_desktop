@@ -1,6 +1,5 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "modern_style.h"
 #include <signal.h>
 #include <errno.h>
 #ifdef HH_ENABLE_RVIZ
@@ -27,44 +26,15 @@ namespace {
 #endif
   }
 
-// -------------------------- Material Design Colors --------------------------
-static QColor materialColor(const QString& state) {
-    if (state == "success" || state == "ok") return QColor("#4CAF50");      // Material Green
-    if (state == "warning" || state == "warn") return QColor("#FF9800");    // Material Orange  
-    if (state == "error" || state == "crash") return QColor("#F44336");     // Material Red
-    if (state == "info" || state == "starting") return QColor("#2196F3");   // Material Blue
-    return QColor("#9E9E9E");  // Material Grey for default/stopped
-}
-
+// -------------------------- Color Helper --------------------------
 static QColor levelToColor(uint8_t level) {
   using diagnostic_msgs::DiagnosticStatus;
   switch (level) {
-    case DiagnosticStatus::OK:    return materialColor("success");
-    case DiagnosticStatus::WARN:  return materialColor("warning");
-    case DiagnosticStatus::ERROR: return materialColor("error");
-    default:                      return materialColor("default");
+    case DiagnosticStatus::OK:    return QColor("#2ECC71"); // green
+    case DiagnosticStatus::WARN:  return QColor("#F1C40F"); // yellow
+    case DiagnosticStatus::ERROR: return QColor("#E74C3C"); // red
+    default:                      return QColor("#95A5A6"); // grey
   }
-}
-
-// Material Design status update with elevation and proper typography
-static void updateStatusLabel(QLabel* label, const QString& text, const QColor& color) {
-    label->setText(text);
-    // Material Design Card with elevation 2
-    label->setStyleSheet(QString(
-        "QLabel { "
-        "background-color: %1; "
-        "color: #FFFFFF; "
-        "border: none; "
-        "border-radius: 8px; "
-        "padding: 16px; "
-        "font-weight: 500; "
-        "font-size: 14px; "
-        "letter-spacing: 0.25px; "
-        "box-shadow: 0px 3px 1px -2px rgba(0,0,0,0.2), "
-        "            0px 2px 2px 0px rgba(0,0,0,0.14), "
-        "            0px 1px 5px 0px rgba(0,0,0,0.12); "
-        "}"
-    ).arg(color.name()));
 }   
 
 // -------------------------- --------------------------
@@ -73,23 +43,6 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    
-    // Apply Material Design styling
-    // this->setStyleSheet(MaterialStyle::getStyleSheet());
-    
-    // Set window properties for a more modern look
-    this->setWindowTitle("Handheld Scanner Control");
-    this->setMinimumSize(900, 700);
-    
-    // Add tooltips for better UX
-    ui->startDriversButton->setToolTip("Start all essential drivers (ROS Core, Camera, Lidar, Watchdog)");
-    ui->stopDriversButton->setToolTip("Stop all running drivers");
-    ui->startSlamButton->setToolTip("Start SLAM mapping (requires Camera and Lidar)");
-    ui->stopSlamButton->setToolTip("Stop SLAM mapping");
-    ui->startDynamicReconfigureButton->setToolTip("Open dynamic parameter configuration");
-    ui->stopDynamicReconfigureButton->setToolTip("Close dynamic parameter configuration");
-    ui->startRecordingButton->setToolTip("Start recording selected topics to rosbag");
-    ui->stopRecordingButton->setToolTip("Stop current recording");
 
     connect(ui->nextPageButton, &QPushButton::clicked, this, &MainWindow::showNextPage);
     connect(ui->prevPageButton, &QPushButton::clicked, this, &MainWindow::showPrevPage);
@@ -170,7 +123,7 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::startDrivers()
 {    
     scanner_->startDrivers();
-    updateStatusLabel(ui->roscoreStatus, tr("Starting..."), materialColor("starting"));
+    ui->roscoreStatus->setText(tr("Starting..."));
     // only enable the SLAM button if both camera and lidar drivers are running
     // TODO 
     ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
@@ -225,9 +178,10 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
         return; 
     }
 
-    const QString statusText = tr("%1: %2").arg(sev, msg);
-    updateStatusLabel(targetLabel, statusText, levelToColor(level));
-}
+    targetLabel->setText(tr("%1: %2").arg(sev, msg ));
+    targetLabel->setStyleSheet(QStringLiteral("color:%1;")
+                               .arg(levelToColor(level).name()));
+  }
 
 
 // -------------------------- Driver Slots --------------------------
@@ -237,7 +191,8 @@ void MainWindow::onDriverOutput(const QString& /*key*/, const QString& output) {
 
 void MainWindow::onDriverStarted(const QString& key) {
     if (key == kRoscoreKey) {
-        updateStatusLabel(ui->roscoreStatus, tr("Running"), materialColor("success"));
+        ui->roscoreStatus->setText(tr("Running"));
+        ui->roscoreStatus->setStyleSheet("color:green;");
     } else if (key == kCameraKey) {
         cameraRunning_ = true;
         if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
@@ -255,15 +210,18 @@ void MainWindow::onDriverStarted(const QString& key) {
 
 void MainWindow::onDriverStopped(const QString& key) {
     if (key == kRoscoreKey) {
-        updateStatusLabel(ui->roscoreStatus, tr("Stopped"), materialColor("default"));
+        ui->roscoreStatus->setText(tr("Roscore stopped."));
+        ui->roscoreStatus->setStyleSheet("");
     } else if (key == kCameraKey) {
         cameraRunning_ = false;
-        updateStatusLabel(ui->cameraStatus, tr("Camera Stopped"), materialColor("default"));
+        ui->cameraStatus->setText(tr("Camera driver stopped."));
+        ui->cameraStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
         ui->startDynamicReconfigureButton->setEnabled(false);
     } else if (key == kLidarKey) {
         lidarRunning_ = false;
-        updateStatusLabel(ui->lidarStatus, tr("Lidar Stopped"), materialColor("default"));
+        ui->lidarStatus->setText(tr("Lidar driver stopped."));
+        ui->lidarStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
     } else if (key == kSlamKey) {
         ui->stopSlamButton->setEnabled(false);
@@ -277,14 +235,10 @@ void MainWindow::onDriverStopped(const QString& key) {
  void MainWindow::onDriverCrashed(const QString& key) {
     QMessageBox::warning(this, "Process Failure", tr("%1 has stopped running.").arg(key));
     if (key == kRoscoreKey) {
-        updateStatusLabel(ui->roscoreStatus, tr("CRASHED"), materialColor("error"));
+        ui->roscoreStatus->setText(tr("Roscore crashed."));
+        ui->roscoreStatus->setStyleSheet("color:red;");
     } else if (key == kCameraKey || key == kLidarKey) {
         ui->startSlamButton->setEnabled(false);
-        if (key == kCameraKey) {
-            updateStatusLabel(ui->cameraStatus, tr("CRASHED"), materialColor("error"));
-        } else {
-            updateStatusLabel(ui->lidarStatus, tr("CRASHED"), materialColor("error"));
-        }
     }
  }
  
@@ -317,11 +271,11 @@ void MainWindow::on_lidarCheckbox_stateChanged(int checked)
 }
 
 void MainWindow::onRecordingStarted() {
-    updateStatusLabel(ui->recordStatus, "Recording...", QColor("#DC004E")); // Material Pink
+    ui->recordStatus->setText("Recording...");
 }
 
 void MainWindow::onRecordingStopped() {
-    updateStatusLabel(ui->recordStatus, "OFF", materialColor("default"));
+    ui->recordStatus->setText("OFF");
 }
 
 void MainWindow::showNextPage() {
