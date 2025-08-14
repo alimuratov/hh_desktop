@@ -1,4 +1,4 @@
-QT       += core gui
+QT       += core gui opengl widgets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -31,10 +31,14 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 ROS_WS = /home/kodifly/handheld_scanner_ws/devel
 INCLUDEPATH += $${ROS_WS}/include
+INCLUDEPATH += /usr/include/qt5
+INCLUDEPATH += /usr/include/qt5/QtOpenGL
+INCLUDEPATH += /usr/include/qt5/QtWidgets
 
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    mapvizwidget.cpp \
     rosbagrecorder.cpp \
     scanner_controller.cpp
     mapvizwidget.cpp
@@ -42,6 +46,7 @@ SOURCES += \
 HEADERS += \
     mainwindow.h \
     diagnostics_monitor.h \
+    mapvizwidget.h \
     rosbagrecorder.h \
     scanner_controller.h \
     process_config.h \
@@ -53,6 +58,7 @@ HEADERS += \
 FORMS += \
     mainwindow.ui
 
+#LIBS += -L$$ROS_WS/lib -lmapviz
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin

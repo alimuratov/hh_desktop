@@ -52,6 +52,18 @@ MainWindow::MainWindow(QWidget *parent)
         ui->nextPageButton->setEnabled(false);
     }
 
+    // Add MapvizWidget only to page_8
+    QWidget* page8 = findChild<QWidget*>("page_8");
+    if (page8) {
+        QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(page8->layout());
+        if (!layout) {
+            layout = new QVBoxLayout(page8);
+            page8->setLayout(layout);
+        }
+        MapvizWidget* mapvizWidget = new MapvizWidget(page8);
+        layout->addWidget(mapvizWidget);
+    }
+
 #ifdef HH_ENABLE_RVIZ
     rviz_widget_ = std::make_unique<RvizWidget>(QString::fromUtf8(kRvizConfig), this);
     auto rvizLayout = new QVBoxLayout(ui->rvizContainer);
@@ -62,8 +74,7 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 
         // Add MapvizWidget to location page
-        constexpr char kMapvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz"; // Change to your mapviz config path if needed
-        mapviz_widget_ = std::make_unique<MapvizWidget>(QString::fromUtf8(kMapvizConfig), this);
+        mapviz_widget_ = std::make_unique<MapvizWidget>(this);
         QVBoxLayout* mapvizLayout = new QVBoxLayout(ui->locationTitleLabel->parentWidget());
         mapvizLayout->setContentsMargins(0, 0, 0, 0);
         mapvizLayout->addWidget(mapviz_widget_.get());

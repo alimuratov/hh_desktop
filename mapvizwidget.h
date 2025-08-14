@@ -3,19 +3,23 @@
 
 #include <QWidget>
 
-namespace mapviz {
-class MapvizFrame;
-}
+
+
+
+
+class QProcess;
+class QLabel;
 
 class MapvizWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit MapvizWidget(const QString& configPath, QWidget* parent = nullptr);
+    explicit MapvizWidget(QWidget* parent = nullptr);
     ~MapvizWidget();
 
 private:
-    mapviz::MapvizFrame* frame_;
+    QLabel* statusLabel;
+    QProcess* mapvizProcess;
 };
 
 #endif // MAPVIZWIDGET_H
