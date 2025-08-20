@@ -7,36 +7,43 @@
 #endif
 
 // anonymous namespace grants internal linkage to everything declared inside it, meaning that the constants exist only within this translation unit
-// implications: 
+// implications:
 // 1. no other cpp file can collide with these names
 // 2. constants are not exported
 // 3. we avoid one-definition-rule headaches that arise if you move the constants to a header
 // we can freely change their values here without forcing a full rebuild of every file that includes the header
-// and there is zero risk of multiple definitions at link time 
+// and there is zero risk of multiple definitions at link time
 
-namespace {
+namespace
+{
     constexpr char kPtp4lKey[] = "ptp4l";
     constexpr char kCameraKey[] = "camera";
     constexpr char kLidarKey[] = "lidar";
-    constexpr char kWatchdogKey[]  = "watchdog";
+    constexpr char kWatchdogKey[] = "watchdog";
     constexpr char kSlamKey[] = "slam";
     constexpr char kRoscoreKey[] = "roscore";
     constexpr char kDynamicReconfigureKey[] = "dynamic_reconfigure";
 #ifdef HH_ENABLE_RVIZ
-      constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
+    constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
 #endif
-  }
+}
 
 // -------------------------- Color Helper --------------------------
-static QColor levelToColor(uint8_t level) {
-  using diagnostic_msgs::DiagnosticStatus;
-  switch (level) {
-    case DiagnosticStatus::OK:    return QColor("#2ECC71"); // green
-    case DiagnosticStatus::WARN:  return QColor("#F1C40F"); // yellow
-    case DiagnosticStatus::ERROR: return QColor("#E74C3C"); // red
-    default:                      return QColor("#95A5A6"); // grey
-  }
-}   
+static QColor levelToColor(uint8_t level)
+{
+    using diagnostic_msgs::DiagnosticStatus;
+    switch (level)
+    {
+    case DiagnosticStatus::OK:
+        return QColor("#2ECC71"); // green
+    case DiagnosticStatus::WARN:
+        return QColor("#F1C40F"); // yellow
+    case DiagnosticStatus::ERROR:
+        return QColor("#E74C3C"); // red
+    default:
+        return QColor("#95A5A6"); // grey
+    }
+}
 
 // -------------------------- --------------------------
 
@@ -48,7 +55,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->nextPageButton, &QPushButton::clicked, this, &MainWindow::showNextPage);
     connect(ui->prevPageButton, &QPushButton::clicked, this, &MainWindow::showPrevPage);
     ui->prevPageButton->setEnabled(false);
-    if (ui->stackedWidget->count() <= 1) {
+    if (ui->stackedWidget->count() <= 1)
+    {
         ui->nextPageButton->setEnabled(false);
     }
 
@@ -56,7 +64,7 @@ MainWindow::MainWindow(QWidget *parent)
     rviz_widget_ = std::make_unique<RvizWidget>(QString::fromUtf8(kRvizConfig), this);
     auto rvizLayout = new QVBoxLayout(ui->rvizContainer);
     rvizLayout->setContentsMargins(0, 0, 0, 0);
-    rvizLayout->addWidget(rviz_widget_.get());     
+    rvizLayout->addWidget(rviz_widget_.get());
 #else
     ui->rvizContainer->setVisible(false);
 #endif
@@ -84,9 +92,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(scanner_.get(), &ScannerController::driverCrashed,
             this, &MainWindow::onDriverCrashed);
     connect(scanner_.get(), &ScannerController::driverError,
-            this, [this](const QString& key, const QString& error) {
-        QMessageBox::warning(this, "Driver Error", QString("%1: %2").arg(key, error));
-    });
+            this, [this](const QString &key, const QString &error)
+            { QMessageBox::warning(this, "Driver Error", QString("%1: %2").arg(key, error)); });
     connect(scanner_.get(), &ScannerController::driverOutput,
             this, &MainWindow::onDriverOutput);
     connect(scanner_.get(), &ScannerController::diagnosticsUpdated,
@@ -96,13 +103,14 @@ MainWindow::MainWindow(QWidget *parent)
     connect(scanner_.get(), &ScannerController::recordingStopped,
             this, &MainWindow::onRecordingStopped);
     connect(scanner_.get(), &ScannerController::recordingError,
-            this, [this](const QString& err){ QMessageBox::warning(this, "Record Warning", err); });
+            this, [this](const QString &err)
+            { QMessageBox::warning(this, "Record Warning", err); });
 
     connect(ui->cameraCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_cameraCheckbox_stateChanged);
     connect(ui->lidarCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_lidarCheckbox_stateChanged);
 
-
-    connect(ui->startRecordingButton, &QPushButton::clicked, this, [this] {
+    connect(ui->startRecordingButton, &QPushButton::clicked, this, [this]
+            {
         if (scanner_->isRecording()) {
             QMessageBox::warning(this, "Record Warning", tr("Stop recording before starting a new one."));
             return;
@@ -112,8 +120,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
         
         QStringList topics = recordTopics_.values();
-        scanner_->startRecording("my_bag", topics);
-    });
+        scanner_->startRecording("my_bag", topics); });
 
     connect(ui->stopRecordingButton, &QPushButton::clicked,
             scanner_.get(), &ScannerController::stopRecording);
@@ -121,39 +128,45 @@ MainWindow::MainWindow(QWidget *parent)
 
 // -------------------------- Buttons --------------------------
 
-void MainWindow::startDrivers() {    
+void MainWindow::startDrivers()
+{
     scanner_->startDrivers();
     ui->roscoreStatus->setText(tr("Starting..."));
     // only enable the SLAM button if both camera and lidar drivers are running
-    // TODO 
+    // TODO
     ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
 }
 
-void MainWindow::stopDrivers() {
+void MainWindow::stopDrivers()
+{
     scanner_->stopDrivers();
     ui->startSlamButton->setEnabled(false);
     ui->stopSlamButton->setEnabled(false);
 }
 
-void MainWindow::startSlam() {
+void MainWindow::startSlam()
+{
     scanner_->startSlam();
     ui->startSlamButton->setEnabled(false);
     ui->stopSlamButton->setEnabled(true);
 }
 
-void MainWindow::stopSlam() {
+void MainWindow::stopSlam()
+{
     scanner_->stopSlam();
     ui->stopSlamButton->setEnabled(false);
     ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
 }
 
-void MainWindow::startDynamicReconfigure() {
+void MainWindow::startDynamicReconfigure()
+{
     scanner_->startDynamicReconfigure();
     ui->startDynamicReconfigureButton->setEnabled(false);
     ui->stopDynamicReconfigureButton->setEnabled(true);
 }
 
-void MainWindow::stopDynamicReconfigure() {
+void MainWindow::stopDynamicReconfigure()
+{
     scanner_->stopDynamicReconfigure();
     ui->stopDynamicReconfigureButton->setEnabled(false);
     ui->startDynamicReconfigureButton->setEnabled(cameraRunning_);
@@ -161,148 +174,211 @@ void MainWindow::stopDynamicReconfigure() {
 
 // -------------------------- Diagnostics --------------------------
 
-void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg, const QString &recordedFrequency) {
+void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg, const QString &recordedFrequency)
+{
     qDebug() << "Name: " << name << " Level: " << level << " Message: " << msg;
 
-    const QString sev = (level == 0) ? "OK"
-                       : (level == 1) ? "WARN"
-                       : (level == 2) ? "ERROR"
-                       : "STALE";
+    // create a file and insert all of the parameters
+    QFile file("diagnostics.txt");
+    if (!file.open(QIODevice::Append | QIODevice::Text))
+    {
+        qWarning() << "Failed to open diagnostics file for writing.";
+        return;
+    }
+    QTextStream out(&file);
+    out << "Name: " << name << ", Level: " << level << ", Message: " << msg
+        << ", Frequency: " << recordedFrequency << "\n";
+    file.close();
 
-    QLabel* targetLabel; 
-    if (name == "river_watchdog: camera_rate") {
+    const QString sev = (level == 0)   ? "OK"
+                        : (level == 1) ? "WARN"
+                        : (level == 2) ? "ERROR"
+                                       : "STALE";
+
+    QLabel *targetLabel;
+    if (name == "river_watchdog: camera_rate")
+    {
         targetLabel = ui->cameraStatus;
-    } else if (name == "river_watchdog: lidar_rate") {
+    }
+    else if (name == "river_watchdog: lidar_rate")
+    {
         targetLabel = ui->lidarStatus;
-    } else if (name == "river_watchdog: Offset Accuracy") {
+    }
+    else if (name == "river_watchdog: Offset Accuracy")
+    {
         targetLabel = ui->syncStatus;
-    } else {
-        return; 
+    }
+    else
+    {
+        return;
     }
 
-    targetLabel->setText(tr("%1: %2").arg(sev, msg ));
+    targetLabel->setText(tr("%1: %2").arg(sev, msg));
     targetLabel->setStyleSheet(QStringLiteral("color:%1;")
-                               .arg(levelToColor(level).name()));
-  }
-
-
-// -------------------------- Driver Slots --------------------------
-void MainWindow::onDriverOutput(const QString& /*key*/, const QString& output) {
-    qDebug().noquote() << output;
-}   
-
-void MainWindow::onDriverStarted(const QString& key) {
-    if (key == kRoscoreKey) {
-        ui->roscoreStatus->setText(tr("Running"));
-        ui->roscoreStatus->setStyleSheet("color:green;");
-    } else if (key == kCameraKey) {
-        cameraRunning_ = true;
-        if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
-        ui->startDynamicReconfigureButton->setEnabled(true);
-    } else if (key == kLidarKey) {
-        lidarRunning_ = true;
-        if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
-    } else if (key == kPtp4lKey) {
-        ptpRunning_ = true;
-        //offsetRunning = true;
-        //ui->syncStatus->setText(tr("Waiting for status..."));
-        if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
-    } else if (key == kSlamKey) {
-        ui->stopSlamButton->setEnabled(true);
-    } else if (key == kDynamicReconfigureKey) {
-        ui->startDynamicReconfigureButton->setEnabled(false);
-        ui->stopDynamicReconfigureButton->setEnabled(true);
-    } 
+                                   .arg(levelToColor(level).name()));
 }
 
-void MainWindow::onDriverStopped(const QString& key) {
-    if (key == kRoscoreKey) {
+// -------------------------- Driver Slots --------------------------
+void MainWindow::onDriverOutput(const QString & /*key*/, const QString &output)
+{
+    qDebug().noquote() << output;
+}
+
+void MainWindow::onDriverStarted(const QString &key)
+{
+    if (key == kRoscoreKey)
+    {
+        ui->roscoreStatus->setText(tr("Running"));
+        ui->roscoreStatus->setStyleSheet("color:green;");
+    }
+    else if (key == kCameraKey)
+    {
+        cameraRunning_ = true;
+        if (cameraRunning_ && lidarRunning_)
+            ui->startSlamButton->setEnabled(true);
+        ui->startDynamicReconfigureButton->setEnabled(true);
+    }
+    else if (key == kLidarKey)
+    {
+        lidarRunning_ = true;
+        if (cameraRunning_ && lidarRunning_)
+            ui->startSlamButton->setEnabled(true);
+    }
+    else if (key == kPtp4lKey)
+    {
+        ptpRunning_ = true;
+        // offsetRunning = true;
+        // ui->syncStatus->setText(tr("Waiting for status..."));
+        if (cameraRunning_ && lidarRunning_)
+            ui->startSlamButton->setEnabled(true);
+    }
+    else if (key == kSlamKey)
+    {
+        ui->stopSlamButton->setEnabled(true);
+    }
+    else if (key == kDynamicReconfigureKey)
+    {
+        ui->startDynamicReconfigureButton->setEnabled(false);
+        ui->stopDynamicReconfigureButton->setEnabled(true);
+    }
+}
+
+void MainWindow::onDriverStopped(const QString &key)
+{
+    if (key == kRoscoreKey)
+    {
         ui->roscoreStatus->setText(tr("Roscore stopped."));
         ui->roscoreStatus->setStyleSheet("");
-    } else if (key == kCameraKey) {
+    }
+    else if (key == kCameraKey)
+    {
         cameraRunning_ = false;
         ui->cameraStatus->setText(tr("Camera driver stopped."));
         ui->cameraStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
         ui->startDynamicReconfigureButton->setEnabled(false);
-    } else if (key == kLidarKey) {
+    }
+    else if (key == kLidarKey)
+    {
         lidarRunning_ = false;
         ui->lidarStatus->setText(tr("Lidar driver stopped."));
         ui->lidarStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
-    } else if (key == kPtp4lKey) {
+    }
+    else if (key == kPtp4lKey)
+    {
         ptpRunning_ = false;
-        //offsetRunning = false;
+        // offsetRunning = false;
         ui->syncStatus->setText(tr("ptp stopped."));
         ui->syncStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
-    } else if (key == kSlamKey) {
+    }
+    else if (key == kSlamKey)
+    {
         ui->stopSlamButton->setEnabled(false);
         ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
-    } else if (key == kDynamicReconfigureKey) {
+    }
+    else if (key == kDynamicReconfigureKey)
+    {
         ui->stopDynamicReconfigureButton->setEnabled(false);
         ui->startDynamicReconfigureButton->setEnabled(cameraRunning_);
     }
- }
+}
 
- void MainWindow::onDriverCrashed(const QString& key) {
+void MainWindow::onDriverCrashed(const QString &key)
+{
     QMessageBox::warning(this, "Process Failure", tr("%1 has stopped running.").arg(key));
-    if (key == kRoscoreKey) {
+    if (key == kRoscoreKey)
+    {
         ui->roscoreStatus->setText(tr("Roscore crashed."));
         ui->roscoreStatus->setStyleSheet("color:red;");
-    } else if (key == kCameraKey || key == kLidarKey) {
+    }
+    else if (key == kCameraKey || key == kLidarKey)
+    {
         ui->startSlamButton->setEnabled(false);
     }
- }
- 
+}
+
 // -------------------------- closeEvent --------------------------
 
-void MainWindow::closeEvent(QCloseEvent* event) {
+void MainWindow::closeEvent(QCloseEvent *event)
+{
     scanner_->stopDrivers();
     QMainWindow::closeEvent(event);
 }
 
-MainWindow::~MainWindow() = default; 
-
+MainWindow::~MainWindow() = default;
 
 void MainWindow::on_cameraCheckbox_stateChanged(int checked)
 {
-    if (checked == 0) {
+    if (checked == 0)
+    {
         recordTopics_.remove("/left_camera/image");
-    } else if (checked == 2) {
+    }
+    else if (checked == 2)
+    {
         recordTopics_ << "/left_camera/image";
     }
 }
 
 void MainWindow::on_lidarCheckbox_stateChanged(int checked)
 {
-    if (checked == 0) {
+    if (checked == 0)
+    {
         recordTopics_.remove("/livox/lidar");
-    } else if (checked == 2) {
+    }
+    else if (checked == 2)
+    {
         recordTopics_ << "/livox/lidar";
     }
 }
 
-void MainWindow::onRecordingStarted() {
+void MainWindow::onRecordingStarted()
+{
     ui->recordStatus->setText("Recording...");
 }
 
-void MainWindow::onRecordingStopped() {
+void MainWindow::onRecordingStopped()
+{
     ui->recordStatus->setText("OFF");
 }
 
-void MainWindow::showNextPage() {
+void MainWindow::showNextPage()
+{
     int index = ui->stackedWidget->currentIndex();
-    if (index < ui->stackedWidget->count() - 1) {
+    if (index < ui->stackedWidget->count() - 1)
+    {
         ui->stackedWidget->setCurrentIndex(index + 1);
     }
     ui->prevPageButton->setEnabled(true);
     ui->nextPageButton->setEnabled(ui->stackedWidget->currentIndex() < ui->stackedWidget->count() - 1);
 }
 
-void MainWindow::showPrevPage() {
+void MainWindow::showPrevPage()
+{
     int index = ui->stackedWidget->currentIndex();
-    if (index > 0) {
+    if (index > 0)
+    {
         ui->stackedWidget->setCurrentIndex(index - 1);
     }
     ui->nextPageButton->setEnabled(true);
