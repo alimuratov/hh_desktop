@@ -68,5 +68,7 @@ private:
     QSet<QString> recordTopics_;
     bool cameraRunning_ = false;
     bool lidarRunning_ = false;
+    bool ptpRunning_ = false;
+    //bool offsetRunning = false;
 };
 #endif // MAINWINDOW_H

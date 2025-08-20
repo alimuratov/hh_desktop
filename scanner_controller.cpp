@@ -60,7 +60,8 @@ void ScannerController::startDrivers() {
     startProcess("camera");
     startProcess("lidar");
     startProcess("watchdog");
-
+    startProcess("ptp4l");
+    startProcess("sync");
     // Start dynamic_reconfigure after camera is ready
     // The dependency is handled in process_config.h
     startProcess("dynamic_reconfigure");
@@ -70,6 +71,7 @@ void ScannerController::stopDrivers() {
     stopProcess("slam");
     stopProcess("dynamic_reconfigure");
     stopProcess("watchdog");
+    stopProcess("ptp4l");
     stopProcess("lidar");
     stopProcess("camera");
     stopProcess("roscore");

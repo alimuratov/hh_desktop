@@ -16,7 +16,8 @@ namespace Config {
             "/velodyne_points",
             "/imu/data",
             "/tf",
-            "/tf_static"
+            "/tf_static",
+            "/average_offset"
         };
     }
     
@@ -24,7 +25,8 @@ namespace Config {
     inline QStringList getMonitoredTasks() {
         return {
             "river_watchdog: camera_rate",
-            "river_watchdog: lidar_rate"
+            "river_watchdog: lidar_rate",
+            "river_watchdog: Offset Accuracy"
         };
     }
     

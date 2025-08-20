@@ -92,6 +92,32 @@ inline void initializeProcesses() {
         false
     });
 
+    // PTP
+    registry.registerProcess({
+        "ptp4l",
+        "PTP4L",
+        "/home/kodifly/setup_scripts/ptp4l.sh",
+        {},
+        [](const auto& running) {
+            return running.count("camera") > 0 && running.count("lidar") > 0;
+        },
+        0,
+        false
+    });
+
+    // Sync Status
+    registry.registerProcess({
+        "sync",
+        "SYNC",
+        "/home/kodifly/setup_scripts/offset_setup.sh",
+        {},
+        [](const auto& running) {
+            return running.count("camera") > 0 && running.count("lidar") > 0;
+        },
+        0,
+        false
+    });
+
     // SLAM
     registry.registerProcess({
         "slam",

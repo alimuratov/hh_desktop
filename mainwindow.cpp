@@ -15,6 +15,7 @@
 // and there is zero risk of multiple definitions at link time 
 
 namespace {
+    constexpr char kPtp4lKey[] = "ptp4l";
     constexpr char kCameraKey[] = "camera";
     constexpr char kLidarKey[] = "lidar";
     constexpr char kWatchdogKey[]  = "watchdog";
@@ -120,8 +121,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 // -------------------------- Buttons --------------------------
 
-void MainWindow::startDrivers()
-{    
+void MainWindow::startDrivers() {    
     scanner_->startDrivers();
     ui->roscoreStatus->setText(tr("Starting..."));
     // only enable the SLAM button if both camera and lidar drivers are running
@@ -174,6 +174,8 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
         targetLabel = ui->cameraStatus;
     } else if (name == "river_watchdog: lidar_rate") {
         targetLabel = ui->lidarStatus;
+    } else if (name == "river_watchdog: Offset Accuracy") {
+        targetLabel = ui->syncStatus;
     } else {
         return; 
     }
@@ -200,12 +202,17 @@ void MainWindow::onDriverStarted(const QString& key) {
     } else if (key == kLidarKey) {
         lidarRunning_ = true;
         if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
+    } else if (key == kPtp4lKey) {
+        ptpRunning_ = true;
+        //offsetRunning = true;
+        //ui->syncStatus->setText(tr("Waiting for status..."));
+        if (cameraRunning_ && lidarRunning_) ui->startSlamButton->setEnabled(true);
     } else if (key == kSlamKey) {
         ui->stopSlamButton->setEnabled(true);
     } else if (key == kDynamicReconfigureKey) {
         ui->startDynamicReconfigureButton->setEnabled(false);
         ui->stopDynamicReconfigureButton->setEnabled(true);
-    }
+    } 
 }
 
 void MainWindow::onDriverStopped(const QString& key) {
@@ -222,6 +229,12 @@ void MainWindow::onDriverStopped(const QString& key) {
         lidarRunning_ = false;
         ui->lidarStatus->setText(tr("Lidar driver stopped."));
         ui->lidarStatus->setStyleSheet("");
+        ui->startSlamButton->setEnabled(false);
+    } else if (key == kPtp4lKey) {
+        ptpRunning_ = false;
+        //offsetRunning = false;
+        ui->syncStatus->setText(tr("ptp stopped."));
+        ui->syncStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
     } else if (key == kSlamKey) {
         ui->stopSlamButton->setEnabled(false);
