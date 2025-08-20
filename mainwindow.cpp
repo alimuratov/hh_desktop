@@ -206,6 +206,8 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
     }
     else if (name == "river_watchdog: Offset Accuracy")
     {
+        // print a message to the console
+        qDebug() << "------------------------ AAAAA ------------------------ ";
         targetLabel = ui->syncStatus;
     }
     else
