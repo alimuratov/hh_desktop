@@ -47,6 +47,7 @@ private:
       }
       if (it == last_level_.end() || it->second != level) {
         last_level_[name] = level;
+        std::cout << last_level_[name] << std::endl; 
         emit statusChanged(QString::fromStdString(name), level,
                            QString::fromStdString(status.message),
                            QString::fromStdString(frequency));
