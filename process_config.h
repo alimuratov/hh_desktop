@@ -105,6 +105,19 @@ inline void initializeProcesses() {
         false
     });
 
+    // GPS RTK
+    registry.registerProcess({
+        "gpsrtk",
+        "GPS RTK",
+        "/home/kodifly/setup_scripts/gps_rtk.sh",
+        {},
+        [](const auto& running) {
+            return running.count("roscore") > 0;
+        },
+        0,
+        false
+    });
+
     // Sync Status
     registry.registerProcess({
         "sync",
