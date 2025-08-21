@@ -17,7 +17,8 @@ namespace Config {
             "/imu/data",
             "/tf",
             "/tf_static",
-            "/average_offset"
+            "/average_offset",
+            "/gps/fix"
         };
     }
     
@@ -26,7 +27,8 @@ namespace Config {
         return {
             "river_watchdog: camera_rate",
             "river_watchdog: lidar_rate",
-            "river_watchdog: Offset Accuracy"
+            "river_watchdog: Offset Accuracy",
+            "river_watchdog: gps_rate"
         };
     }
     

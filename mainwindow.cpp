@@ -19,6 +19,7 @@ namespace
     constexpr char kPtp4lKey[] = "ptp4l";
     constexpr char kCameraKey[] = "camera";
     constexpr char kLidarKey[] = "lidar";
+    constexpr char kGpsKey[] = "gpsrtk";
     constexpr char kWatchdogKey[] = "watchdog";
     constexpr char kSlamKey[] = "slam";
     constexpr char kRoscoreKey[] = "roscore";
@@ -204,10 +205,14 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
     {
         targetLabel = ui->lidarStatus;
     }
+    else if (name == "river_watchdog: gps_rate")
+    {
+        targetLabel = ui->gpsStatus;
+    }
     else if (name == "river_watchdog: Offset Accuracy")
     {
         // print a message to the console
-        qDebug() << "------------------------ AAAAA ------------------------ ";
+        //qDebug() << "------------------------ AAAAA ------------------------ ";
         targetLabel = ui->syncStatus;
     }
     else
@@ -243,6 +248,12 @@ void MainWindow::onDriverStarted(const QString &key)
     else if (key == kLidarKey)
     {
         lidarRunning_ = true;
+        if (cameraRunning_ && lidarRunning_)
+            ui->startSlamButton->setEnabled(true);
+    }
+    else if (key == kGpsKey)
+    {
+        gpsRunning_ = true;
         if (cameraRunning_ && lidarRunning_)
             ui->startSlamButton->setEnabled(true);
     }
@@ -285,6 +296,13 @@ void MainWindow::onDriverStopped(const QString &key)
         lidarRunning_ = false;
         ui->lidarStatus->setText(tr("Lidar driver stopped."));
         ui->lidarStatus->setStyleSheet("");
+        ui->startSlamButton->setEnabled(false);
+    }
+    else if (key == kGpsKey)
+    {
+        gpsRunning_ = false;
+        ui->gpsStatus->setText(tr("GPS driver stopped."));
+        ui->gpsStatus->setStyleSheet("");
         ui->startSlamButton->setEnabled(false);
     }
     else if (key == kPtp4lKey)

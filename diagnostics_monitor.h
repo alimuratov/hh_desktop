@@ -31,6 +31,7 @@ private:
       const std::string &name = status.name;
       if (name != "river_watchdog: camera_rate" &&
           name != "river_watchdog: lidar_rate" &&
+          name != "river_watchdog: gps_rate" &&
           name != "river_watchdog: Offset Accuracy") {
         continue; // we only care about these three tasks
       }
@@ -54,43 +55,6 @@ private:
       }
     }
   }
-
-  /*void diagCb(const diagnostic_msgs::DiagnosticArrayConstPtr &msg) {
-    // Get the list of tasks we should monitor from the central config file.
-    const QStringList monitored_tasks = Config::getMonitoredTasks();
-
-    for (const auto &status : msg->status) {
-      // Convert the incoming status name to a QString for comparison
-      const QString taskName = QString::fromStdString(status.name);
-
-      // Check if this task is in our list from the config file.
-      // If the list from the config file does NOT contain this taskName, skip it.
-      if (!monitored_tasks.contains(taskName)) {
-        continue;
-      }
-
-      // --- The rest of the function is the same as before ---
-      // If we get here, it's a name we care about!
-      int level = status.level;
-      auto it = last_level_.find(status.name); // Use status.name (std::string) here
-      std::string frequency; 
-      for (const auto& kv : status.values)
-      {
-          if (kv.key == "Actual frequency (Hz)")
-          {
-              frequency = kv.value; 
-              break;
-          }
-      }
-      if (it == last_level_.end() || it->second != level) {
-        last_level_[status.name] = level;
-        emit statusChanged(taskName, level,
-                           QString::fromStdString(status.message),
-                           QString::fromStdString(frequency));
-      }
-    }
-  }*/
-
 
   ros::Subscriber sub_;
   std::unordered_map<std::string, int> last_level_;

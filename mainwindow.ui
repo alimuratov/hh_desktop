@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
-f  <widget class="QWidget" name="centralwidget">
+  <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_8">
     <property name="spacing">
      <number>0</number>
@@ -273,9 +273,19 @@ f  <widget class="QWidget" name="centralwidget">
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="gpsCheckBox">
+            <property name="text">
+             <string>GPS Topics</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="horizontalSpacer">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Expanding</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
