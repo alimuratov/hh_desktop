@@ -44,6 +44,8 @@ private slots:
     void stopSlam();
     void startDynamicReconfigure();
     void stopDynamicReconfigure();
+    void startMapviz();
+    void stopMapviz();
 
     //driver feedback
     void onDriverStarted(const QString& key);
@@ -61,14 +63,14 @@ private slots:
     void showPrevPage();
 private:
     Ui::MainWindow *ui;
+    void setupUiActions();
+    void setupControllerSignals();
+    void updateUiState();
+
 #ifdef HH_ENABLE_RVIZ
       std::unique_ptr<RvizWidget> rviz_widget_;
 #endif
     std::unique_ptr<ScannerController> scanner_;
     QSet<QString> recordTopics_;
-    bool cameraRunning_ = false;
-    bool lidarRunning_ = false;
-    bool gpsRunning_ = false;
-    bool ptpRunning_ = false;
 };
 #endif // MAINWINDOW_H

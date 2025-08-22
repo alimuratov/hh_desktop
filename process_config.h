@@ -169,4 +169,18 @@ inline void initializeProcesses() {
         500,  // Small delay to ensure camera is ready
         false
     });
+
+    // Mapviz
+    registry.registerProcess({
+        "mapviz",
+        "Mapviz",
+        "/home/kodifly/setup_scripts/start_mapviz.sh",
+        {},
+        [](const auto& running) {
+            // Requires ROS master and GPS RTK
+            return running.count("roscore") > 0 && running.count("gpsrtk") > 0;
+        },
+        0,
+        false
+    });
 }

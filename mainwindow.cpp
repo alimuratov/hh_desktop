@@ -24,9 +24,29 @@ namespace
     constexpr char kSlamKey[] = "slam";
     constexpr char kRoscoreKey[] = "roscore";
     constexpr char kDynamicReconfigureKey[] = "dynamic_reconfigure";
+    constexpr char kMapvizKey[] = "mapviz";
 #ifdef HH_ENABLE_RVIZ
     constexpr char kRvizConfig[] = "/home/kodifly/hh_desktop/config/view.rviz";
 #endif
+}
+
+void MainWindow::updateUiState()
+{
+    const bool canStartSlam = scanner_->canStart("slam");
+    const bool canStartDynReconf = scanner_->canStart("dynamic_reconfigure");
+    const bool canStartMapviz = scanner_->canStart("mapviz");
+
+    const bool slamRunning = scanner_->isRunning("slam");
+    ui->startSlamButton->setEnabled(canStartSlam && !slamRunning);
+    ui->stopSlamButton->setEnabled(slamRunning);
+
+    const bool dynRunning = scanner_->isRunning("dynamic_reconfigure");
+    ui->startDynamicReconfigureButton->setEnabled(canStartDynReconf && !dynRunning);
+    ui->stopDynamicReconfigureButton->setEnabled(dynRunning);
+
+    const bool mapvizRunning = scanner_->isRunning("mapviz");
+    ui->startMapvizButton->setEnabled(canStartMapviz && !mapvizRunning);
+    ui->stopMapvizButton->setEnabled(mapvizRunning);
 }
 
 // -------------------------- Color Helper --------------------------
@@ -53,8 +73,6 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    connect(ui->nextPageButton, &QPushButton::clicked, this, &MainWindow::showNextPage);
-    connect(ui->prevPageButton, &QPushButton::clicked, this, &MainWindow::showPrevPage);
     ui->prevPageButton->setEnabled(false);
     if (ui->stackedWidget->count() <= 1)
     {
@@ -70,22 +88,52 @@ MainWindow::MainWindow(QWidget *parent)
     ui->rvizContainer->setVisible(false);
 #endif
 
+    ros::NodeHandle nh;
+
+    scanner_ = std::make_unique<ScannerController>(nh, this);
+
+    // Wire UI and controller signals
+    setupUiActions();
+    setupControllerSignals();
+    updateUiState();
+}
+
+void MainWindow::setupUiActions()
+{
+    connect(ui->nextPageButton, &QPushButton::clicked, this, &MainWindow::showNextPage);
+    connect(ui->prevPageButton, &QPushButton::clicked, this, &MainWindow::showPrevPage);
+
     connect(ui->startDriversButton, &QPushButton::clicked, this, &MainWindow::startDrivers);
     connect(ui->stopDriversButton, &QPushButton::clicked, this, &MainWindow::stopDrivers);
     connect(ui->startSlamButton, &QPushButton::clicked, this, &MainWindow::startSlam);
     connect(ui->stopSlamButton, &QPushButton::clicked, this, &MainWindow::stopSlam);
     connect(ui->startDynamicReconfigureButton, &QPushButton::clicked, this, &MainWindow::startDynamicReconfigure);
     connect(ui->stopDynamicReconfigureButton, &QPushButton::clicked, this, &MainWindow::stopDynamicReconfigure);
-    ui->startSlamButton->setEnabled(false);
-    ui->stopSlamButton->setEnabled(false);
-    ui->startDynamicReconfigureButton->setEnabled(false);
-    ui->stopDynamicReconfigureButton->setEnabled(false);
 
-    ros::NodeHandle nh;
+    connect(ui->startMapvizButton, &QPushButton::clicked, this, &MainWindow::startMapviz);
+    connect(ui->stopMapvizButton, &QPushButton::clicked, this, &MainWindow::stopMapviz);
+    
+    // Checkbox handlers use Qt's auto-connect via on_<objectName>_stateChanged
 
-    scanner_ = std::make_unique<ScannerController>(nh, this);
+    connect(ui->startRecordingButton, &QPushButton::clicked, this, [this]
+            {
+        if (scanner_->isRecording()) {
+            QMessageBox::warning(this, "Record Warning", tr("Stop recording before starting a new one."));
+            return;
+        } else if (recordTopics_.isEmpty()) {
+            QMessageBox::warning(this, "Record Warning", tr("Select at least one topic."));
+            return;
+        }
+        
+        QStringList topics = recordTopics_.values();
+        scanner_->startRecording("my_bag", topics); });
 
-    // TODO: combine signal-slot connections into a single connect call
+    connect(ui->stopRecordingButton, &QPushButton::clicked,
+            scanner_.get(), &ScannerController::stopRecording);
+}
+
+void MainWindow::setupControllerSignals()
+{
     connect(scanner_.get(), &ScannerController::driverStarted,
             this, &MainWindow::onDriverStarted);
     connect(scanner_.get(), &ScannerController::driverStopped,
@@ -106,25 +154,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(scanner_.get(), &ScannerController::recordingError,
             this, [this](const QString &err)
             { QMessageBox::warning(this, "Record Warning", err); });
-
-    connect(ui->cameraCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_cameraCheckbox_stateChanged);
-    connect(ui->lidarCheckbox, &QCheckBox::stateChanged, this, &MainWindow::on_lidarCheckbox_stateChanged);
-
-    connect(ui->startRecordingButton, &QPushButton::clicked, this, [this]
-            {
-        if (scanner_->isRecording()) {
-            QMessageBox::warning(this, "Record Warning", tr("Stop recording before starting a new one."));
-            return;
-        } else if (recordTopics_.isEmpty()) {
-            QMessageBox::warning(this, "Record Warning", tr("Select at least one topic."));
-            return;
-        }
-        
-        QStringList topics = recordTopics_.values();
-        scanner_->startRecording("my_bag", topics); });
-
-    connect(ui->stopRecordingButton, &QPushButton::clicked,
-            scanner_.get(), &ScannerController::stopRecording);
 }
 
 // -------------------------- Buttons --------------------------
@@ -133,44 +162,49 @@ void MainWindow::startDrivers()
 {
     scanner_->startDrivers();
     ui->roscoreStatus->setText(tr("Starting..."));
-    // only enable the SLAM button if both camera and lidar drivers are running
-    // TODO
-    ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
+    updateUiState();
 }
 
 void MainWindow::stopDrivers()
 {
     scanner_->stopDrivers();
-    ui->startSlamButton->setEnabled(false);
-    ui->stopSlamButton->setEnabled(false);
+    updateUiState();
 }
 
 void MainWindow::startSlam()
 {
     scanner_->startSlam();
-    ui->startSlamButton->setEnabled(false);
-    ui->stopSlamButton->setEnabled(true);
+    updateUiState();
 }
 
 void MainWindow::stopSlam()
 {
     scanner_->stopSlam();
-    ui->stopSlamButton->setEnabled(false);
-    ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
+    updateUiState();
 }
 
 void MainWindow::startDynamicReconfigure()
 {
     scanner_->startDynamicReconfigure();
-    ui->startDynamicReconfigureButton->setEnabled(false);
-    ui->stopDynamicReconfigureButton->setEnabled(true);
+    updateUiState();
 }
 
 void MainWindow::stopDynamicReconfigure()
 {
     scanner_->stopDynamicReconfigure();
-    ui->stopDynamicReconfigureButton->setEnabled(false);
-    ui->startDynamicReconfigureButton->setEnabled(cameraRunning_);
+    updateUiState();
+}
+
+void MainWindow::startMapviz()
+{
+    scanner_->startMapviz();
+    updateUiState();
+}
+
+void MainWindow::stopMapviz()
+{
+    scanner_->stopMapviz();
+    updateUiState();
 }
 
 // -------------------------- Diagnostics --------------------------
@@ -240,40 +274,26 @@ void MainWindow::onDriverStarted(const QString &key)
     }
     else if (key == kCameraKey)
     {
-        cameraRunning_ = true;
-        if (cameraRunning_ && lidarRunning_)
-            ui->startSlamButton->setEnabled(true);
-        ui->startDynamicReconfigureButton->setEnabled(true);
     }
     else if (key == kLidarKey)
     {
-        lidarRunning_ = true;
-        if (cameraRunning_ && lidarRunning_)
-            ui->startSlamButton->setEnabled(true);
     }
     else if (key == kGpsKey)
     {
-        gpsRunning_ = true;
-        if (cameraRunning_ && lidarRunning_)
-            ui->startSlamButton->setEnabled(true);
     }
     else if (key == kPtp4lKey)
     {
-        ptpRunning_ = true;
-        // offsetRunning = true;
-        // ui->syncStatus->setText(tr("Waiting for status..."));
-        if (cameraRunning_ && lidarRunning_)
-            ui->startSlamButton->setEnabled(true);
     }
     else if (key == kSlamKey)
     {
-        ui->stopSlamButton->setEnabled(true);
     }
     else if (key == kDynamicReconfigureKey)
     {
-        ui->startDynamicReconfigureButton->setEnabled(false);
-        ui->stopDynamicReconfigureButton->setEnabled(true);
     }
+    else if (key == kMapvizKey)
+    {
+    }
+    updateUiState();
 }
 
 void MainWindow::onDriverStopped(const QString &key)
@@ -285,44 +305,35 @@ void MainWindow::onDriverStopped(const QString &key)
     }
     else if (key == kCameraKey)
     {
-        cameraRunning_ = false;
         ui->cameraStatus->setText(tr("Camera driver stopped."));
         ui->cameraStatus->setStyleSheet("");
-        ui->startSlamButton->setEnabled(false);
-        ui->startDynamicReconfigureButton->setEnabled(false);
     }
     else if (key == kLidarKey)
     {
-        lidarRunning_ = false;
         ui->lidarStatus->setText(tr("Lidar driver stopped."));
         ui->lidarStatus->setStyleSheet("");
-        ui->startSlamButton->setEnabled(false);
     }
     else if (key == kGpsKey)
     {
-        gpsRunning_ = false;
         ui->gpsStatus->setText(tr("GPS driver stopped."));
         ui->gpsStatus->setStyleSheet("");
-        ui->startSlamButton->setEnabled(false);
     }
     else if (key == kPtp4lKey)
     {
-        ptpRunning_ = false;
         // offsetRunning = false;
         ui->syncStatus->setText(tr("ptp stopped."));
         ui->syncStatus->setStyleSheet("");
-        ui->startSlamButton->setEnabled(false);
     }
     else if (key == kSlamKey)
     {
-        ui->stopSlamButton->setEnabled(false);
-        ui->startSlamButton->setEnabled(cameraRunning_ && lidarRunning_);
     }
     else if (key == kDynamicReconfigureKey)
     {
-        ui->stopDynamicReconfigureButton->setEnabled(false);
-        ui->startDynamicReconfigureButton->setEnabled(cameraRunning_);
     }
+    else if (key == kMapvizKey)
+    {
+    }
+    updateUiState();
 }
 
 void MainWindow::onDriverCrashed(const QString &key)

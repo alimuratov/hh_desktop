@@ -93,7 +93,16 @@ void ScannerController::startDynamicReconfigure() {
 
 void ScannerController::stopDynamicReconfigure() {
     stopProcess("dynamic_reconfigure");
-}// -------------------------- process helpers --------------------------
+}
+
+void ScannerController::startMapviz() {
+    startProcess("mapviz");
+}
+
+void ScannerController::stopMapviz() {
+    stopProcess("mapviz");
+}
+// -------------------------- process helpers --------------------------
 
 std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessConfig& config) {
     auto proc = std::make_unique<QProcess>(this);
@@ -269,4 +278,20 @@ bool ScannerController::killProcessGroup(qint64 pid, int sig, int waitMs) {
         QThread::msleep(50);
     }
     return false;
+}
+
+// -------------------------- query helpers --------------------------
+
+bool ScannerController::isRunning(const QString& key) const {
+    return drivers_.count(key) > 0;
+}
+
+bool ScannerController::canStart(const QString& key) const {
+    const ProcessConfig* config = ProcessRegistry::instance().getProcess(key);
+    if (!config) return false;
+    std::unordered_map<QString, bool, QStringHash> running;
+    for (const auto& pair : drivers_) {
+        running[pair.first] = true;
+    }
+    return config->canStart(running);
 }

@@ -31,6 +31,14 @@ public:
     void startDynamicReconfigure();
     void stopDynamicReconfigure();
 
+    // -------------------------- Mapviz control --------------------------
+    void startMapviz();
+    void stopMapviz();
+
+    // -------------------------- Query state/prerequisites --------------------------
+    bool isRunning(const QString& key) const;
+    bool canStart(const QString& key) const;
+
     
 signals:
     void recordingStarted();
