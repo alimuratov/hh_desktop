@@ -95,6 +95,11 @@ MainWindow::MainWindow(QWidget *parent)
     // Wire UI and controller signals
     setupUiActions();
     setupControllerSignals();
+    // Periodic UI refresh as a safety net
+    uiRefreshTimer_ = new QTimer(this);
+    uiRefreshTimer_->setInterval(1000);
+    connect(uiRefreshTimer_, &QTimer::timeout, this, &MainWindow::updateUiState);
+    uiRefreshTimer_->start();
     updateUiState();
 }
 

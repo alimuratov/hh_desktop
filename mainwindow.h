@@ -17,6 +17,7 @@
 #include <QLabel>
 #include <QSet>
 #include <QCloseEvent>
+#include <QTimer>
 #include "scanner_controller.h"
 #include "diagnostics_monitor.h"
 #include "rosbagrecorder.h"
@@ -72,5 +73,6 @@ private:
 #endif
     std::unique_ptr<ScannerController> scanner_;
     QSet<QString> recordTopics_;
+    QTimer* uiRefreshTimer_ = nullptr;
 };
 #endif // MAINWINDOW_H

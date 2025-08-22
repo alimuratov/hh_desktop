@@ -15,6 +15,11 @@ ScannerController::ScannerController(ros::NodeHandle& nh, QObject* parent)
 {
     connect(rosTimer_, &QTimer::timeout, [] { ros::spinOnce(); });
     rosTimer_->start(10);
+    // Periodic dump of drivers_ snapshot
+    driversDumpTimer_ = new QTimer(this);
+    driversDumpTimer_->setInterval(1000);
+    connect(driversDumpTimer_, &QTimer::timeout, this, &ScannerController::dumpDriversSnapshot);
+    driversDumpTimer_->start();
     // Connect RosbagRecorder signals
     connect(recorder.get(), &RosbagRecorder::recordingStarted,
             this, &ScannerController::recordingStarted);
@@ -278,6 +283,23 @@ bool ScannerController::killProcessGroup(qint64 pid, int sig, int waitMs) {
         QThread::msleep(50);
     }
     return false;
+}
+
+void ScannerController::dumpDriversSnapshot() {
+    const qint64 ts = QDateTime::currentMSecsSinceEpoch();
+    const QString filename = QString("drivers_%1.txt").arg(ts);
+    QFile f(filename);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        return;
+    }
+    QTextStream out(&f);
+    out << "# drivers_ snapshot at " << QDateTime::fromMSecsSinceEpoch(ts).toString(Qt::ISODate) << "\n";
+    for (const auto& pair : drivers_) {
+        const QString& key = pair.first;
+        QProcess* proc = pair.second.get();
+        out << key << ": pid=" << proc->processId() << " state=" << proc->state() << "\n";
+    }
+    f.close();
 }
 
 // -------------------------- query helpers --------------------------

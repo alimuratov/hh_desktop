@@ -62,6 +62,7 @@ private:
     using DriverMap = std::unordered_map<QString, std::unique_ptr<QProcess>, QStringHash>;
     DriverMap drivers_;
     QTimer* rosTimer_;
+    QTimer* driversDumpTimer_ = nullptr;
 
     // Generic process control
     void startProcess(const QString& key);
@@ -80,4 +81,5 @@ private slots:
     void readDriverOutput();
     void processCrashed();
     void processFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void dumpDriversSnapshot();
 };
