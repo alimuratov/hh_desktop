@@ -3,6 +3,9 @@
 #include <QDateTime>
 #include <QThread>
 #include <QDebug>
+#include <QFile>
+#include <QProcess>
+#include <QTextStream>
 #include <errno.h>
 #include <signal.h>
 
@@ -154,12 +157,14 @@ void ScannerController::startProcess(const QString& key) {
         return;
     }
 
-    std::unordered_map<QString, bool, QStringHash> runningProcesses;
-    for (const auto& [k, _] : drivers_) {
-        runningProcesses[k] = true;
+    // Do not start if an external instance is already running
+    if (hasExternalRunning(key)) {
+        emit driverError(key, QString("%1 already running externally").arg(config->name));
+        return;
     }
 
-    if (!config->canStart(runningProcesses)) {
+    // Verify prerequisites using unified logic (includes external processes)
+    if (!canStart(key)) {
         emit driverError(key, QString("%1 prerequisites not met").arg(config->name));
         return;
     }
@@ -305,15 +310,74 @@ void ScannerController::dumpDriversSnapshot() {
 // -------------------------- query helpers --------------------------
 
 bool ScannerController::isRunning(const QString& key) const {
-    return drivers_.count(key) > 0;
+    return drivers_.count(key) > 0 || hasExternalRunning(key);
 }
 
 bool ScannerController::canStart(const QString& key) const {
     const ProcessConfig* config = ProcessRegistry::instance().getProcess(key);
     if (!config) return false;
     std::unordered_map<QString, bool, QStringHash> running;
+    // include controller-managed processes
     for (const auto& pair : drivers_) {
         running[pair.first] = true;
     }
+    // include externally-running processes
+    for (const QString& k : ProcessRegistry::instance().getAllKeys()) {
+        if (running.count(k) == 0 && !findExternalPids(k).isEmpty()) {
+            running[k] = true;
+        }
+    }
     return config->canStart(running);
+}
+
+QList<qint64> ScannerController::findExternalPids(const QString& key) const {
+    QList<qint64> result;
+    const ProcessConfig* config = ProcessRegistry::instance().getProcess(key);
+    if (!config) return result;
+
+    QSet<qint64> ownedPids;
+    for (const auto& pair : drivers_) {
+        if (pair.second) ownedPids.insert(pair.second->processId());
+    }
+
+    QProcess pgrep;
+    const QString cmd = QString("pgrep -f %1").arg(config->executable);
+    pgrep.start("/bin/sh", QStringList() << "-c" << cmd);
+    if (!pgrep.waitForFinished(1000)) return result;
+    const QByteArray out = pgrep.readAllStandardOutput();
+    const QList<QByteArray> lines = out.split('\n');
+    for (const QByteArray& line : lines) {
+        bool ok = false;
+        qint64 pid = QString::fromUtf8(line).trimmed().toLongLong(&ok);
+        if (!ok || pid <= 0) continue;
+        if (ownedPids.contains(pid)) continue;
+        result.append(pid);
+    }
+    return result;
+}
+
+bool ScannerController::hasExternalRunning(const QString& key) const {
+    return !findExternalPids(key).isEmpty();
+}
+
+void ScannerController::cleanupExternal(const QString& key) {
+    const QList<qint64> pids = findExternalPids(key);
+    for (qint64 pid : pids) {
+        ::kill(pid, SIGINT);
+        QThread::msleep(500);
+        if (::kill(pid, 0) == 0) {
+            ::kill(pid, SIGTERM);
+            QThread::msleep(500);
+        }
+        if (::kill(pid, 0) == 0) {
+            ::kill(pid, SIGKILL);
+        }
+    }
+}
+
+void ScannerController::cleanupAllExternals() {
+    const auto keys = ProcessRegistry::instance().getAllKeys();
+    for (const QString& key : keys) {
+        cleanupExternal(key);
+    }
 }

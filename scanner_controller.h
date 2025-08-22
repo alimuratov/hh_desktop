@@ -38,6 +38,9 @@ public:
     // -------------------------- Query state/prerequisites --------------------------
     bool isRunning(const QString& key) const;
     bool canStart(const QString& key) const;
+    bool hasExternalRunning(const QString& key) const;
+    void cleanupExternal(const QString& key);
+    void cleanupAllExternals();
 
     
 signals:
@@ -73,6 +76,7 @@ private:
     void shutdownProcess(const QString& key);
     bool killProcessGroup(qint64 pid, int sig, int waitMs);
     QString findVictimKey(QProcess* proc);
+    QList<qint64> findExternalPids(const QString& key) const;
 
     void handleProcessCrash(const QString& crashedProc);
     void handleProcessCompletion(const QString& completedProc);

@@ -2,7 +2,7 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++14 link_pkgconfig rviz
+CONFIG += c++17 link_pkgconfig rviz
 PKGCONFIG += roscpp sensor_msgs diagnostic_updater
 
 contains(CONFIG, rviz) {

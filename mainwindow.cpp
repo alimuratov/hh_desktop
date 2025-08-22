@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include <signal.h>
 #include <errno.h>
+#include <QCoreApplication>
 #ifdef HH_ENABLE_RVIZ
 #include <QVBoxLayout>
 #endif
@@ -100,6 +101,13 @@ MainWindow::MainWindow(QWidget *parent)
     uiRefreshTimer_->setInterval(1000);
     connect(uiRefreshTimer_, &QTimer::timeout, this, &MainWindow::updateUiState);
     uiRefreshTimer_->start();
+    // Ensure drivers stop on application quit
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [this]
+            {
+        if (scanner_) {
+            scanner_->stopDrivers();
+        }
+    });
     updateUiState();
 }
 
