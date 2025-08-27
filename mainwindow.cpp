@@ -242,27 +242,40 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
                         : (level == 2) ? "ERROR"
                                        : "STALE";
 
-    QLabel *targetLabel;
+    QLabel *targetLabel = nullptr;
+    QString driverKey; // map diagnostic source to controller process key
     if (name == "river_watchdog: camera_rate")
     {
         targetLabel = ui->cameraStatus;
+        driverKey = kCameraKey;
     }
     else if (name == "river_watchdog: lidar_rate")
     {
         targetLabel = ui->lidarStatus;
+        driverKey = kLidarKey;
     }
     else if (name == "river_watchdog: gps_rate")
     {
         targetLabel = ui->gpsStatus;
+        driverKey = kGpsKey;
     }
     else if (name == "river_watchdog: Offset Accuracy")
     {
-        // print a message to the console
-        // qDebug() << "------------------------ AAAAA ------------------------ ";
         targetLabel = ui->syncStatus;
+        driverKey = kPtp4lKey; // treat offset accuracy as ptp4l/sync process
     }
     else
     {
+        return; // unrelated diagnostic
+    }
+
+    // If the underlying driver/process is no longer running, don't overwrite the
+    // explicit "<driver> stopped" status that onDriverStopped set. This prevents
+    // late or trailing watchdog diagnostic messages from resurrecting an OK/WARN
+    // label after we've stopped the process.
+    if (!driverKey.isEmpty() && scanner_ && !scanner_->isRunning(driverKey))
+    {
+        qDebug() << "[ui] skip diag update for" << driverKey << "(process stopped)";
         return;
     }
 
