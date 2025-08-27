@@ -427,7 +427,14 @@ void ScannerController::processFinished(int exitCode, QProcess::ExitStatus exitS
         return;
     QString victimKey = findVictimKey(senderProc);
     if (victimKey.isEmpty())
+    {
+        // This happens when we manually initiated shutdown: we removed the process from
+        // drivers_ inside shutdownProcess() before the QProcess emitted finished().
+        // In that case driverStopped was already emitted (source=shutdownProcess) and
+        // we intentionally skip handleProcessCompletion to avoid double emissions.
+        qDebug() << "[restart] finished signal for already-removed process (likely manual stop)";
         return;
+    }
     if (exitStatus == QProcess::CrashExit)
     {
         if (victimKey == "mapviz")
@@ -490,13 +497,17 @@ void ScannerController::handleProcessCompletion(const QString &completedProc)
         uptimeMs = QDateTime::currentMSecsSinceEpoch() - tsIt->second;
     }
     shutdownProcess(completedProc);
-    emit driverStopped(completedProc);
+    // NOTE: driverStopped already emitted inside shutdownProcess(). We previously
+    // emitted it again here (causing duplicate signals on natural exit). That
+    // duplication confused restart / UI logic, so it has been removed. Leaving
+    // this comment for traceability.
+    qDebug() << "[restart] completion path after shutdownProcess for" << completedProc << "uptimeMs=" << uptimeMs;
 
     // Handle dependencies
-    if (completedProc == "camera" || completedProc == "lidar")
-    {
-        stopSlam();
-    }
+    // if (completedProc == "camera" || completedProc == "lidar")
+    //{
+    //    stopSlam();
+    //}
 
     // Decide if we should restart (short-lived normal exit treated as failure)
     const ProcessConfig *config = ProcessRegistry::instance().getProcess(completedProc);
@@ -506,9 +517,18 @@ void ScannerController::handleProcessCompletion(const QString &completedProc)
         if (uptimeMs >= 0 && uptimeMs < kStableUptimeMs)
         {
             int attempt = ++restartAttempts_[completedProc];
+            qDebug() << "[restart] early-exit normal completion scheduling restart" << completedProc << "attempt" << attempt << "uptimeMs=" << uptimeMs << "<" << kStableUptimeMs;
             scheduleRestart(completedProc, QStringLiteral("early-exit (%1 ms)").arg(uptimeMs), attempt);
             return;
         }
+        else
+        {
+            qDebug() << "[restart] completion considered stable (no restart)" << completedProc << "uptimeMs=" << uptimeMs << ">=" << kStableUptimeMs;
+        }
+    }
+    else
+    {
+        qDebug() << "[restart] auto-restart not applicable after completion" << completedProc << "critical=" << (config ? config->critical : -1);
     }
 
     // Stable completion (clear attempts tracking)
@@ -594,11 +614,18 @@ bool ScannerController::shouldAutoRestart(const QString &key) const
 {
     // Policy: don't auto-restart roscore (leave adoption/cleanup logic), otherwise allow for all known processes including mapviz.
     if (key == "roscore")
+    {
+        qDebug() << "[restart] shouldAutoRestart(" << key << ")=false (roscore policy)";
         return false;
+    }
     // Respect max attempts
     auto it = restartAttempts_.find(key);
     if (it != restartAttempts_.end() && it->second >= kMaxRestartAttempts)
+    {
+        qDebug() << "[restart] shouldAutoRestart(" << key << ")=false (max attempts reached) attempts=" << it->second;
         return false;
+    }
+    qDebug() << "[restart] shouldAutoRestart(" << key << ")=true";
     return true;
 }
 
