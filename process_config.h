@@ -174,7 +174,10 @@ inline void initializeProcesses()
                               "Mapviz",
                               "/home/kodifly/setup_scripts/start_mapviz.sh",
                               {},
-                              [](const auto &running) {},
+                              [](const auto &running)
+                              {
+                                  return true;
+                              },
                               0,
                               false});
 }
