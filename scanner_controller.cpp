@@ -62,6 +62,11 @@ bool ScannerController::isRecording() const
 
 void ScannerController::startDrivers()
 {
+    if (forceExternalCleanup_)
+    {
+        qDebug() << "Force external cleanup enabled. Attempting to terminate externally running processes before startup.";
+        cleanupAllExternals();
+    }
     startProcess("roscore");
 
     // Wait for roscore to initialize - this could also be moved to ProcessConfig
@@ -340,7 +345,7 @@ void ScannerController::dumpDriversSnapshot()
 {
     const qint64 ts = QDateTime::currentMSecsSinceEpoch();
     const QString filename = QString("drivers_%1.txt").arg(ts);
-    
+
     QFile f(filename);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
     {
@@ -449,6 +454,10 @@ void ScannerController::cleanupAllExternals()
     const auto keys = ProcessRegistry::instance().getAllKeys();
     for (const QString &key : keys)
     {
+        const QList<qint64> pids = findExternalPids(key);
+        if (pids.isEmpty())
+            continue;
+        qDebug() << "Cleaning external" << key << "PIDs=" << pids;
         cleanupExternal(key);
     }
 }
