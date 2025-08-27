@@ -207,7 +207,26 @@ void ScannerController::startProcess(const QString &key)
         }
         if (!cleared && hasExternalRunning(key))
         {
-            emit driverError(key, QString("%1 already running externally").arg(config->name));
+            // Collect detailed PID / PGID info for the message box
+            QList<qint64> extPids = findExternalPids(key);
+            QStringList pidStrs;
+            QSet<qint64> pgidSet;
+            for (qint64 pid : extPids)
+            {
+                pidStrs << QString::number(pid);
+                pid_t pg = getpgid(static_cast<pid_t>(pid));
+                if (pg > 0)
+                    pgidSet.insert(pg);
+            }
+            QStringList pgidStrs;
+            for (qint64 pg : pgidSet)
+            {
+                pgidStrs << QString::number(pg);
+            }
+            emit driverError(key, QString("%1 already running externally. PIDs=[%2] PGIDs=[%3]")
+                                      .arg(config->name,
+                                           pidStrs.join(","),
+                                           pgidStrs.join(",")));
             return;
         }
     }
