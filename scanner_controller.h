@@ -91,9 +91,9 @@ private:
     void handleProcessCompletion(const QString &completedProc);
 
     // config flags
-    bool forceExternalCleanup_ = true;  // if true, startDrivers() will attempt to stop externally running matching processes first
-    bool adoptExternalRoscore_ = true;  // treat an already-running roscore as acceptable and 'adopt' it instead of erroring
-    bool verboseExternalDetect_ = true; // emit detailed logs for findExternalPids
+    bool forceExternalCleanup_ = true;   // if true, startDrivers() will attempt to stop externally running matching processes first
+    bool adoptExternalRoscore_ = true;   // treat an already-running roscore as acceptable and 'adopt' it instead of erroring
+    bool verboseExternalDetect_ = false; // emit detailed logs for findExternalPids
 
     // tuning constants
     static constexpr int kExternalRetryAttempts = 10; // total attempts after cleanup to verify external gone

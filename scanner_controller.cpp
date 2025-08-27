@@ -7,6 +7,7 @@
 #include <QProcess>
 #include <QTextStream>
 #include <QRegularExpression>
+#include <QElapsedTimer>
 #include <errno.h>
 #include <signal.h>
 
@@ -102,15 +103,23 @@ void ScannerController::stopDrivers()
     // Invalidate any pending scheduled restarts and clear tracking at the end.
     ++restartEpoch_;
     qDebug() << "Stopping all drivers; invalidate restart timers epoch=" << restartEpoch_;
-    stopProcess("slam");
-    stopProcess("dynamic_reconfigure");
-    stopProcess("watchdog");
-    stopProcess("ptp4l");
-    stopProcess("gpsrtk");
-    stopProcess("lidar");
-    stopProcess("camera");
-    // roscore may be external; only stop if we own it
-    stopProcess("roscore");
+    // Ordered shutdown list (reverse-ish dependency order; adjust as needed)
+    QStringList shutdownOrder = {"slam", "dynamic_reconfigure", "watchdog", "ptp4l", "gpsrtk", "lidar", "camera", "roscore"};
+    int total = shutdownOrder.size();
+    int idx = 0;
+    for (const QString &k : shutdownOrder)
+    {
+        ++idx;
+        bool owned = drivers_.count(k) > 0;
+        qDebug() << QString("[shutdown] (%1/%2) %3 %4")
+                        .arg(idx)
+                        .arg(total)
+                        .arg(k)
+                        .arg(owned ? "stopping" : "skip (not running / external)");
+        if (owned)
+            stopProcess(k);
+    }
+    qDebug() << "[shutdown] sequence complete";
     restartAttempts_.clear();
     startTimestamps_.clear();
     // Reset diagnostics cache so next startup re-emits initial statuses even if level unchanged
@@ -532,10 +541,24 @@ void ScannerController::shutdownProcess(const QString &key)
     }
 
     const qint64 pid = it->second->processId();
+    QElapsedTimer timer;
+    timer.start();
 
-    if (!killProcessGroup(pid, SIGINT, 2000) &&
-        !killProcessGroup(pid, SIGTERM, 2000))
+    auto sendWithLog = [&](int sigName, const char *sigLabel, int waitMs) -> bool
     {
+        qDebug() << "[shutdown]" << key << "send" << sigLabel << "pid=" << pid << "pgid=-" << pid << "waitMs=" << waitMs;
+        bool done = killProcessGroup(pid, sigName, waitMs);
+        if (done)
+            qDebug() << "[shutdown]" << key << sigLabel << "success (terminated)";
+        else
+            qDebug() << "[shutdown]" << key << sigLabel << "timeout";
+        return done;
+    };
+
+    if (!sendWithLog(SIGINT, "SIGINT", 2000) &&
+        !sendWithLog(SIGTERM, "SIGTERM", 2000))
+    {
+        qDebug() << "[shutdown]" << key << "escalating to SIGKILL";
         killProcessGroup(pid, SIGKILL, 0);
     }
 
@@ -545,6 +568,7 @@ void ScannerController::shutdownProcess(const QString &key)
     {
         qDebug() << "[mapviz] shutdownProcess end";
     }
+    qDebug() << "[shutdown]" << key << "removed; elapsedMs=" << timer.elapsed();
 }
 
 bool ScannerController::killProcessGroup(qint64 pid, int sig, int waitMs)
