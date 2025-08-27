@@ -390,7 +390,7 @@ void ScannerController::readDriverOutput()
         return;
     const QString text = QString::fromUtf8(senderProc->readAllStandardOutput());
     const QString key = findVictimKey(senderProc);
-    emit driverOutput(key, text);
+    // emit driverOutput(key, text);
     // qDebug().noquote() << text;
     if (key == "mapviz" && !text.trimmed().isEmpty())
     {
@@ -682,7 +682,7 @@ bool ScannerController::canStart(const QString &key) const
         QStringList runningList;
         for (auto &kv : running)
             runningList << kv.first;
-        qDebug() << "[mapviz] canStart check: running set=" << runningList << " result=" << ok;
+        // qDebug() << "[mapviz] canStart check: running set=" << runningList << " result=" << ok;
     }
     return ok;
 }
