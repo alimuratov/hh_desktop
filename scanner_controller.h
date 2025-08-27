@@ -48,6 +48,8 @@ public:
     bool forceExternalCleanup() const { return forceExternalCleanup_; }
     void setAdoptExternalRoscore(bool enable) { adoptExternalRoscore_ = enable; }
     bool adoptExternalRoscore() const { return adoptExternalRoscore_; }
+    void setExternalDetectionVerbose(bool enable) { verboseExternalDetect_ = enable; }
+    bool externalDetectionVerbose() const { return verboseExternalDetect_; }
 
 signals:
     void recordingStarted();
@@ -88,8 +90,9 @@ private:
     void handleProcessCompletion(const QString &completedProc);
 
     // config flags
-    bool forceExternalCleanup_ = true; // if true, startDrivers() will attempt to stop externally running matching processes first
-    bool adoptExternalRoscore_ = true; // treat an already-running roscore as acceptable and 'adopt' it instead of erroring
+    bool forceExternalCleanup_ = true;  // if true, startDrivers() will attempt to stop externally running matching processes first
+    bool adoptExternalRoscore_ = true;  // treat an already-running roscore as acceptable and 'adopt' it instead of erroring
+    bool verboseExternalDetect_ = true; // emit detailed logs for findExternalPids
 
     // tuning constants
     static constexpr int kExternalRetryAttempts = 10; // total attempts after cleanup to verify external gone

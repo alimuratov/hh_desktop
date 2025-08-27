@@ -497,8 +497,18 @@ QList<qint64> ScannerController::findExternalPids(const QString &key) const
     QString candidateCmd = QString("pgrep -f %1").arg(baseExec);
     pgrep.start("/bin/sh", QStringList() << "-c" << candidateCmd);
     if (!pgrep.waitForFinished(1000))
+    {
+        if (verboseExternalDetect_)
+        {
+            qDebug() << "[ext-detect] timeout waiting for pgrep for" << key << "cmd=" << candidateCmd;
+        }
         return result;
+    }
     const QList<QByteArray> lines = pgrep.readAllStandardOutput().split('\n');
+    if (verboseExternalDetect_)
+    {
+        qDebug() << "[ext-detect] raw pgrep candidates for" << key << ":" << lines;
+    }
 
     // Prepare stricter match regex: start-of-line optional exec path, we verify with ps output
     QString escaped = QRegularExpression::escape(baseExec);
@@ -510,22 +520,47 @@ QList<qint64> ScannerController::findExternalPids(const QString &key) const
         bool ok = false;
         qint64 pid = QString::fromUtf8(line).trimmed().toLongLong(&ok);
         if (!ok || pid <= 0)
+        {
+            if (verboseExternalDetect_)
+                qDebug() << "[ext-detect] skip non-numeric token" << line;
             continue;
+        }
         if (ownedPids.contains(pid))
+        {
+            if (verboseExternalDetect_)
+                qDebug() << "[ext-detect] skip owned pid" << pid;
             continue; // skip internally managed
-        // Validate by inspecting command line
+        }
         QString infoCmd = QString("ps -o args= -p %1 2>/dev/null").arg(pid);
         QProcess ps;
         ps.start("/bin/sh", QStringList() << "-c" << infoCmd);
         if (!ps.waitForFinished(300))
-            continue; // skip if can't read
+        {
+            if (verboseExternalDetect_)
+                qDebug() << "[ext-detect] ps timeout pid" << pid;
+            continue;
+        }
         QString cmdLine = QString::fromUtf8(ps.readAllStandardOutput()).trimmed();
         if (cmdLine.isEmpty())
+        {
+            if (verboseExternalDetect_)
+                qDebug() << "[ext-detect] empty cmdline pid" << pid;
             continue;
-        // Heuristic: require the executable token to appear at start or after a space boundary
-        if (!cmdLine.startsWith(baseExec) && !cmdLine.contains(QString(" ") + baseExec))
+        }
+        bool match = cmdLine.startsWith(baseExec) || cmdLine.contains(QString(" ") + baseExec);
+        if (!match)
+        {
+            if (verboseExternalDetect_)
+                qDebug() << "[ext-detect] reject pid" << pid << "cmdLine=" << cmdLine;
             continue;
+        }
+        if (verboseExternalDetect_)
+            qDebug() << "[ext-detect] accept pid" << pid << "cmdLine=" << cmdLine;
         result.append(pid);
+    }
+    if (verboseExternalDetect_)
+    {
+        qDebug() << "[ext-detect] final accepted pids for" << key << "=>" << result;
     }
     return result;
 }
