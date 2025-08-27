@@ -187,10 +187,19 @@ void ScannerController::startProcess(const QString &key)
         return;
     }
 
+    if (key == "mapviz")
+    {
+        qDebug() << "[mapviz] startProcess invoked";
+    }
+
     // External instance handling
     QList<qint64> initialExternalPids;
     if (hasExternalRunning(key))
     {
+        if (key == "mapviz")
+        {
+            qDebug() << "[mapviz] detected external instance candidates before start" << findExternalPids(key);
+        }
         initialExternalPids = findExternalPids(key); // snapshot before retries / adoption
         if (key == "roscore" && adoptExternalRoscore_)
         {
@@ -275,8 +284,16 @@ void ScannerController::startProcess(const QString &key)
     // Verify prerequisites using unified logic (includes external processes)
     if (!canStart(key))
     {
+        if (key == "mapviz")
+        {
+            qDebug() << "[mapviz] canStart returned false";
+        }
         emit driverError(key, QString("%1 prerequisites not met").arg(config->name));
         return;
+    }
+    else if (key == "mapviz")
+    {
+        qDebug() << "[mapviz] prerequisites satisfied, launching process";
     }
 
     auto proc = createDriverProcess(*config);
@@ -466,15 +483,15 @@ bool ScannerController::canStart(const QString &key) const
     {
         running[pair.first] = true;
     }
-    // include externally-running processes
-    for (const QString &k : ProcessRegistry::instance().getAllKeys())
+    bool ok = config->canStart(running);
+    if (key == "mapviz")
     {
-        if (running.count(k) == 0 && !findExternalPids(k).isEmpty())
-        {
-            running[k] = true;
-        }
+        QStringList runningList;
+        for (auto &kv : running)
+            runningList << kv.first;
+        qDebug() << "[mapviz] canStart check: running set=" << runningList << " result=" << ok;
     }
-    return config->canStart(running);
+    return ok;
 }
 
 QList<qint64> ScannerController::findExternalPids(const QString &key) const
