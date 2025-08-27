@@ -162,15 +162,33 @@ std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessCo
     connect(proc.get(), &QProcess::readyReadStandardOutput,
             this, &ScannerController::readDriverOutput);
     connect(proc.get(), &QProcess::errorOccurred,
-            this, &ScannerController::processCrashed);
+            this, [this, k = config.key](QProcess::ProcessError err)
+            {
+                if (k == "mapviz") {
+                    qDebug() << "[mapviz] QProcess errorOccurred" << err;
+                }
+                processCrashed(); });
     connect(proc.get(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-            this, &ScannerController::processFinished);
+            this, [this, k = config.key](int code, QProcess::ExitStatus st)
+            {
+                if (k == "mapviz") {
+                    qDebug() << "[mapviz] processFinished exitCode=" << code << " exitStatus=" << (st==QProcess::NormalExit?"Normal":"Crash");
+                }
+                processFinished(code, st); });
 
     proc->start(program, args);
     if (!proc->waitForStarted())
     {
+        if (config.key == "mapviz")
+        {
+            qDebug() << "[mapviz] waitForStarted failed";
+        }
         emit driverCrashed(config.key);
         return nullptr;
+    }
+    if (config.key == "mapviz")
+    {
+        qDebug() << "[mapviz] createDriverProcess started PID=" << proc->processId() << " program=/usr/bin/setsid wrapped command args=" << args;
     }
     return proc;
 }
@@ -304,6 +322,10 @@ void ScannerController::startProcess(const QString &key)
     }
 
     drivers_.emplace(key, std::move(proc));
+    if (key == "mapviz")
+    {
+        qDebug() << "[mapviz] process stored in drivers_ map";
+    }
 
     // Handle startup delay if configured
     if (config->startupDelayMs > 0)
@@ -328,6 +350,14 @@ void ScannerController::readDriverOutput()
     const QString key = findVictimKey(senderProc);
     emit driverOutput(key, text);
     // qDebug().noquote() << text;
+    if (key == "mapviz" && !text.trimmed().isEmpty())
+    {
+        QStringList lines = text.split('\n', Qt::SkipEmptyParts);
+        for (const QString &l : lines)
+        {
+            qDebug().noquote() << "[mapviz][stdout] " << l;
+        }
+    }
 }
 
 void ScannerController::processCrashed()
@@ -338,6 +368,10 @@ void ScannerController::processCrashed()
     QString victimKey = findVictimKey(senderProc);
     if (!victimKey.isEmpty())
     {
+        if (victimKey == "mapviz")
+        {
+            qDebug() << "[mapviz] processCrashed slot invoked";
+        }
         handleProcessCrash(victimKey);
     }
 }
@@ -353,8 +387,16 @@ void ScannerController::processFinished(int exitCode, QProcess::ExitStatus exitS
         return;
     if (exitStatus == QProcess::CrashExit)
     {
+        if (victimKey == "mapviz")
+        {
+            qDebug() << "[mapviz] processFinished forwarded as crash";
+        }
         handleProcessCrash(victimKey);
         return;
+    }
+    if (victimKey == "mapviz")
+    {
+        qDebug() << "[mapviz] processFinished normal exit";
     }
     handleProcessCompletion(victimKey);
 }
@@ -363,6 +405,10 @@ void ScannerController::processFinished(int exitCode, QProcess::ExitStatus exitS
 
 void ScannerController::handleProcessCrash(const QString &crashedProc)
 {
+    if (crashedProc == "mapviz")
+    {
+        qDebug() << "[mapviz] handleProcessCrash";
+    }
     shutdownProcess(crashedProc);
     emit driverCrashed(crashedProc);
 
@@ -383,6 +429,10 @@ void ScannerController::handleProcessCrash(const QString &crashedProc)
 
 void ScannerController::handleProcessCompletion(const QString &completedProc)
 {
+    if (completedProc == "mapviz")
+    {
+        qDebug() << "[mapviz] handleProcessCompletion";
+    }
     shutdownProcess(completedProc);
     emit driverStopped(completedProc);
 
@@ -412,6 +462,10 @@ void ScannerController::shutdownProcess(const QString &key)
     auto it = drivers_.find(key);
     if (it == drivers_.end())
         return;
+    if (key == "mapviz")
+    {
+        qDebug() << "[mapviz] shutdownProcess begin";
+    }
 
     const qint64 pid = it->second->processId();
 
@@ -423,6 +477,10 @@ void ScannerController::shutdownProcess(const QString &key)
 
     drivers_.erase(it);
     emit driverStopped(key);
+    if (key == "mapviz")
+    {
+        qDebug() << "[mapviz] shutdownProcess end";
+    }
 }
 
 bool ScannerController::killProcessGroup(qint64 pid, int sig, int waitMs)
