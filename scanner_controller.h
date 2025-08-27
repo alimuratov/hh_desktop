@@ -86,7 +86,7 @@ private:
     void handleProcessCompletion(const QString &completedProc);
 
     // config flags
-    bool forceExternalCleanup_ = false; // if true, startDrivers() will attempt to stop externally running matching processes first
+    bool forceExternalCleanup_ = true; // if true, startDrivers() will attempt to stop externally running matching processes first
 
 private slots:
     void readDriverOutput();
