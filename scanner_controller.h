@@ -50,6 +50,7 @@ public:
     bool adoptExternalRoscore() const { return adoptExternalRoscore_; }
     void setExternalDetectionVerbose(bool enable) { verboseExternalDetect_ = enable; }
     bool externalDetectionVerbose() const { return verboseExternalDetect_; }
+    void resetDiagnosticsCache();
 
 signals:
     void recordingStarted();

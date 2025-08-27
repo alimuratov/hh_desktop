@@ -113,6 +113,14 @@ void ScannerController::stopDrivers()
     stopProcess("roscore");
     restartAttempts_.clear();
     startTimestamps_.clear();
+    // Reset diagnostics cache so next startup re-emits initial statuses even if level unchanged
+    resetDiagnosticsCache();
+}
+
+void ScannerController::resetDiagnosticsCache()
+{
+    if (diagnosticsMonitor)
+        diagnosticsMonitor->resetCache();
 }
 
 void ScannerController::startSlam()

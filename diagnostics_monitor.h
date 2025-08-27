@@ -21,6 +21,9 @@ public:
                         &DiagnosticsMonitor::diagCb, this);
   }
 
+  // Clears cached last levels so the next received diagnostic messages will emit again
+  void resetCache() { last_level_.clear(); }
+
 signals:
   // Emitted whenever the level of a watched task changes (0 = OK, 1 = WARN, 2 = ERROR, 3 = STALE). 
   void statusChanged(QString taskName, int level, QString message, QString recordedFrequency);

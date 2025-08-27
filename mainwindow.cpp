@@ -106,8 +106,7 @@ MainWindow::MainWindow(QWidget *parent)
             {
         if (scanner_) {
             scanner_->stopDrivers();
-        }
-    });
+        } });
     updateUiState();
 }
 
@@ -125,7 +124,7 @@ void MainWindow::setupUiActions()
 
     connect(ui->startMapvizButton, &QPushButton::clicked, this, &MainWindow::startMapviz);
     connect(ui->stopMapvizButton, &QPushButton::clicked, this, &MainWindow::stopMapviz);
-    
+
     // Checkbox handlers use Qt's auto-connect via on_<objectName>_stateChanged
 
     connect(ui->startRecordingButton, &QPushButton::clicked, this, [this]
@@ -259,7 +258,7 @@ void MainWindow::onDiagStatus(const QString &name, int level, const QString &msg
     else if (name == "river_watchdog: Offset Accuracy")
     {
         // print a message to the console
-        //qDebug() << "------------------------ AAAAA ------------------------ ";
+        // qDebug() << "------------------------ AAAAA ------------------------ ";
         targetLabel = ui->syncStatus;
     }
     else
@@ -287,12 +286,18 @@ void MainWindow::onDriverStarted(const QString &key)
     }
     else if (key == kCameraKey)
     {
+        ui->cameraStatus->setText(tr("Starting..."));
+        ui->cameraStatus->setStyleSheet("color:gray;");
     }
     else if (key == kLidarKey)
     {
+        ui->lidarStatus->setText(tr("Starting..."));
+        ui->lidarStatus->setStyleSheet("color:gray;");
     }
     else if (key == kGpsKey)
     {
+        ui->gpsStatus->setText(tr("Starting..."));
+        ui->gpsStatus->setStyleSheet("color:gray;");
     }
     else if (key == kPtp4lKey)
     {
