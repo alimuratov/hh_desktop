@@ -207,26 +207,48 @@ void ScannerController::startProcess(const QString &key)
         }
         if (!cleared && hasExternalRunning(key))
         {
-            // Collect detailed PID / PGID info for the message box
+            // Collect detailed PID / PGID and command line info for the message box
             QList<qint64> extPids = findExternalPids(key);
             QStringList pidStrs;
             QSet<qint64> pgidSet;
+            QStringList procDetails; // pid:{pg=XYZ cmd=...}
             for (qint64 pid : extPids)
             {
                 pidStrs << QString::number(pid);
                 pid_t pg = getpgid(static_cast<pid_t>(pid));
                 if (pg > 0)
                     pgidSet.insert(pg);
+
+                // Grab command line
+                QString infoCmd = QString("ps -o args= -p %1 2>/dev/null").arg(pid);
+                QProcess ps;
+                ps.start("/bin/sh", QStringList() << "-c" << infoCmd);
+                QString cmdLine;
+                if (ps.waitForFinished(400))
+                {
+                    cmdLine = QString::fromUtf8(ps.readAllStandardOutput()).trimmed();
+                }
+                if (cmdLine.isEmpty())
+                    cmdLine = "<unknown>";
+                const int kMaxCmd = 80;
+                if (cmdLine.size() > kMaxCmd)
+                    cmdLine = cmdLine.left(kMaxCmd) + QStringLiteral("...");
+                procDetails << QString("%1:{pg=%2 cmd=%3}")
+                                   .arg(pid)
+                                   .arg(pg > 0 ? QString::number(pg) : QStringLiteral("?"))
+                                   .arg(cmdLine.replace('\n', ' '));
             }
             QStringList pgidStrs;
             for (qint64 pg : pgidSet)
             {
                 pgidStrs << QString::number(pg);
             }
-            emit driverError(key, QString("%1 already running externally. PIDs=[%2] PGIDs=[%3]")
+            emit driverError(key, QString("%1 already running externally. PIDs=[%2] PGIDs=[%3] EXEC=%4 DETAILS={%5}")
                                       .arg(config->name,
                                            pidStrs.join(","),
-                                           pgidStrs.join(",")));
+                                           pgidStrs.join(","),
+                                           config->executable,
+                                           procDetails.join(", ")));
             return;
         }
     }
