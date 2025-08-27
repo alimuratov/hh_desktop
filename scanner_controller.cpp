@@ -392,13 +392,17 @@ void ScannerController::readDriverOutput()
     const QString key = findVictimKey(senderProc);
     // emit driverOutput(key, text);
     // qDebug().noquote() << text;
-    if (key == "mapviz" && !text.trimmed().isEmpty())
+    if (!text.trimmed().isEmpty())
     {
-        // Use QString::SkipEmptyParts for broader Qt version compatibility (older Qt versions don't have Qt::SkipEmptyParts)
-        QStringList lines = text.split('\n', QString::SkipEmptyParts);
-        for (const QString &l : lines)
+        // Selectively log stdout for key processes to aid diagnostics debugging.
+        if (key == "mapviz" || key == "watchdog" || key == "camera")
         {
-            qDebug().noquote() << "[mapviz][stdout] " << l;
+            QString tag = key;
+            QStringList lines = text.split('\n', QString::SkipEmptyParts);
+            for (const QString &l : lines)
+            {
+                qDebug().noquote() << "[" << tag << "][stdout] " << l;
+            }
         }
     }
 }
