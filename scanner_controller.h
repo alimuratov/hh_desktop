@@ -46,6 +46,8 @@ public:
     // Configuration: force cleanup of externally running processes before starting drivers
     void setForceExternalCleanup(bool enable) { forceExternalCleanup_ = enable; }
     bool forceExternalCleanup() const { return forceExternalCleanup_; }
+    void setAdoptExternalRoscore(bool enable) { adoptExternalRoscore_ = enable; }
+    bool adoptExternalRoscore() const { return adoptExternalRoscore_; }
 
 signals:
     void recordingStarted();
@@ -87,6 +89,12 @@ private:
 
     // config flags
     bool forceExternalCleanup_ = true; // if true, startDrivers() will attempt to stop externally running matching processes first
+    bool adoptExternalRoscore_ = true; // treat an already-running roscore as acceptable and 'adopt' it instead of erroring
+
+    // tuning constants
+    static constexpr int kExternalRetryAttempts = 10; // total attempts after cleanup to verify external gone
+    static constexpr int kExternalRetryDelayMs = 100; // delay between attempts
+    static constexpr int kSignalPhaseDelayMs = 500;   // delay between escalating signals in cleanupExternal
 
 private slots:
     void readDriverOutput();

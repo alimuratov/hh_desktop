@@ -67,10 +67,17 @@ void ScannerController::startDrivers()
         qDebug() << "Force external cleanup enabled. Attempting to terminate externally running processes before startup.";
         cleanupAllExternals();
     }
-    startProcess("roscore");
-
-    // Wait for roscore to initialize - this could also be moved to ProcessConfig
-    QThread::msleep(1000);
+    // Start or adopt roscore first
+    if (adoptExternalRoscore_ && hasExternalRunning("roscore"))
+    {
+        qDebug() << "Adopting external roscore (will not start internal instance).";
+    }
+    else
+    {
+        startProcess("roscore");
+        // Allow some time for master to come up
+        QThread::msleep(1000);
+    }
 
     startProcess("camera");
     startProcess("lidar");
@@ -179,11 +186,30 @@ void ScannerController::startProcess(const QString &key)
         return;
     }
 
-    // Do not start if an external instance is already running
+    // External instance handling
     if (hasExternalRunning(key))
     {
-        emit driverError(key, QString("%1 already running externally").arg(config->name));
-        return;
+        if (key == "roscore" && adoptExternalRoscore_)
+        {
+            qDebug() << "Adopting external" << key;
+            return; // treat as running
+        }
+        // If cleanup just ran, allow a retry window to let processes exit
+        bool cleared = false;
+        for (int attempt = 0; attempt < kExternalRetryAttempts; ++attempt)
+        {
+            if (!hasExternalRunning(key))
+            {
+                cleared = true;
+                break;
+            }
+            QThread::msleep(kExternalRetryDelayMs);
+        }
+        if (!cleared && hasExternalRunning(key))
+        {
+            emit driverError(key, QString("%1 already running externally").arg(config->name));
+            return;
+        }
     }
 
     // Verify prerequisites using unified logic (includes external processes)
@@ -406,7 +432,15 @@ QList<qint64> ScannerController::findExternalPids(const QString &key) const
     }
 
     QProcess pgrep;
-    const QString cmd = QString("pgrep -f %1").arg(config->executable);
+    // Use a more restrictive pattern: full executable path anchored at start if absolute
+    QString pattern = config->executable;
+    if (pattern.startsWith('/'))
+    {
+        // Anchor: ^/full/path( |$)
+        pattern = QString("^%1( |$)").arg(QRegExp::escape(pattern));
+        // pgrep -f doesn't support full regex anchors consistently; fallback to grep filter below if needed
+    }
+    const QString cmd = QString("pgrep -f %1").arg(config->executable); // keep original for portability
     pgrep.start("/bin/sh", QStringList() << "-c" << cmd);
     if (!pgrep.waitForFinished(1000))
         return result;
@@ -433,18 +467,39 @@ bool ScannerController::hasExternalRunning(const QString &key) const
 void ScannerController::cleanupExternal(const QString &key)
 {
     const QList<qint64> pids = findExternalPids(key);
+    if (key == "roscore" && adoptExternalRoscore_)
+    {
+        if (!pids.isEmpty())
+        {
+            qDebug() << "Skipping kill of external roscore (adopt).";
+        }
+        return;
+    }
     for (qint64 pid : pids)
     {
-        ::kill(pid, SIGINT);
-        QThread::msleep(500);
+        // Attempt group signaling where possible
+        pid_t pgid = getpgid(static_cast<pid_t>(pid));
+        auto sendSig = [&](int sig)
+        {
+            if (pgid > 0)
+            {
+                ::kill(-pgid, sig); // negative to target process group
+            }
+            else
+            {
+                ::kill(pid, sig);
+            }
+        };
+        sendSig(SIGINT);
+        QThread::msleep(kSignalPhaseDelayMs);
         if (::kill(pid, 0) == 0)
         {
-            ::kill(pid, SIGTERM);
-            QThread::msleep(500);
+            sendSig(SIGTERM);
+            QThread::msleep(kSignalPhaseDelayMs);
         }
         if (::kill(pid, 0) == 0)
         {
-            ::kill(pid, SIGKILL);
+            sendSig(SIGKILL);
         }
     }
 }
