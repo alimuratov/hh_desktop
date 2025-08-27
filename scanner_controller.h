@@ -98,6 +98,18 @@ private:
     static constexpr int kExternalRetryAttempts = 10; // total attempts after cleanup to verify external gone
     static constexpr int kExternalRetryDelayMs = 100; // delay between attempts
     static constexpr int kSignalPhaseDelayMs = 500;   // delay between escalating signals in cleanupExternal
+    // auto-restart tuning
+    static constexpr int kMaxRestartAttempts = 5;   // maximum restart attempts per process
+    static constexpr int kStableUptimeMs = 1000;    // uptime threshold (ms) after which process considered stable (no more restarts)
+    static constexpr int kBaseRestartDelayMs = 500; // base delay before restarting (will be multiplied by attempt index for simple backoff)
+
+    // restart tracking
+    std::unordered_map<QString, int, QStringHash> restartAttempts_;    // how many times we've tried restarting
+    std::unordered_map<QString, qint64, QStringHash> startTimestamps_; // ms timestamp when process last started
+    quint64 restartEpoch_ = 0;                                         // increments whenever stopDrivers() is invoked to invalidate pending restart timers
+
+    void scheduleRestart(const QString &key, const QString &reason, int attempt);
+    bool shouldAutoRestart(const QString &key) const; // policy gate
 
 private slots:
     void readDriverOutput();

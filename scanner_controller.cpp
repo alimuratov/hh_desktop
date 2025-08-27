@@ -68,31 +68,40 @@ void ScannerController::startDrivers()
         qDebug() << "Force external cleanup enabled. Attempting to terminate externally running processes before startup.";
         cleanupAllExternals();
     }
+    qDebug() << "[startup] Beginning driver startup sequence";
+    // Define ordered startup (excluding roscore handled separately first)
+    const QStringList orderedKeys = {"camera", "lidar", "gpsrtk", "ptp4l", "watchdog", "sync", "dynamic_reconfigure"};
+    const int totalSteps = 1 + orderedKeys.size(); // roscore + others
+    int step = 1;
+
     // Start or adopt roscore first
     if (adoptExternalRoscore_ && hasExternalRunning("roscore"))
     {
-        qDebug() << "Adopting external roscore (will not start internal instance).";
+        qDebug() << QString("[startup] (%1/%2) roscore: adopting existing external instance").arg(step).arg(totalSteps);
     }
     else
     {
+        qDebug() << QString("[startup] (%1/%2) roscore: launching internal instance").arg(step).arg(totalSteps);
         startProcess("roscore");
         // Allow some time for master to come up
+        qDebug() << "[startup] waiting 1s for roscore to initialize";
         QThread::msleep(1000);
     }
-
-    startProcess("camera");
-    startProcess("lidar");
-    startProcess("gpsrtk");
-    startProcess("ptp4l");
-    startProcess("watchdog");
-    startProcess("sync");
-    // Start dynamic_reconfigure after camera is ready
-    // The dependency is handled in process_config.h
-    startProcess("dynamic_reconfigure");
+    // Iterate remaining processes
+    for (const QString &key : orderedKeys)
+    {
+        ++step;
+        qDebug() << QString("[startup] (%1/%2) launching %3").arg(step).arg(totalSteps).arg(key);
+        startProcess(key);
+    }
+    qDebug() << "[startup] Startup sequence queued. Processes will emit individual PID logs as they actually start.";
 }
 
 void ScannerController::stopDrivers()
 {
+    // Invalidate any pending scheduled restarts and clear tracking at the end.
+    ++restartEpoch_;
+    qDebug() << "Stopping all drivers; invalidate restart timers epoch=" << restartEpoch_;
     stopProcess("slam");
     stopProcess("dynamic_reconfigure");
     stopProcess("watchdog");
@@ -100,7 +109,10 @@ void ScannerController::stopDrivers()
     stopProcess("gpsrtk");
     stopProcess("lidar");
     stopProcess("camera");
+    // roscore may be external; only stop if we own it
     stopProcess("roscore");
+    restartAttempts_.clear();
+    startTimestamps_.clear();
 }
 
 void ScannerController::startSlam()
@@ -157,10 +169,10 @@ std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessCo
 
     connect(proc.get(), &QProcess::started, this, [this, key = config.key, p = proc.get()]
             {
-        qDebug() << key << " PID=" << p->processId();
-        emit driverStarted(key); });
-    connect(proc.get(), &QProcess::readyReadStandardOutput,
-            this, &ScannerController::readDriverOutput);
+            qDebug() << key << " PID=" << p->processId();
+            startTimestamps_[key] = QDateTime::currentMSecsSinceEpoch();
+            emit driverStarted(key); });
+    connect(proc.get(), &QProcess::readyReadStandardOutput, this, &ScannerController::readDriverOutput);
     connect(proc.get(), &QProcess::errorOccurred,
             this, [this, k = config.key](QProcess::ProcessError err)
             {
@@ -168,6 +180,7 @@ std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessCo
                     qDebug() << "[mapviz] QProcess errorOccurred" << err;
                 }
                 processCrashed(); });
+
     connect(proc.get(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
             this, [this, k = config.key](int code, QProcess::ExitStatus st)
             {
@@ -177,6 +190,7 @@ std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessCo
                 processFinished(code, st); });
 
     proc->start(program, args);
+
     if (!proc->waitForStarted())
     {
         if (config.key == "mapviz")
@@ -186,10 +200,12 @@ std::unique_ptr<QProcess> ScannerController::createDriverProcess(const ProcessCo
         emit driverCrashed(config.key);
         return nullptr;
     }
+
     if (config.key == "mapviz")
     {
         qDebug() << "[mapviz] createDriverProcess started PID=" << proc->processId() << " program=/usr/bin/setsid wrapped command args=" << args;
     }
+
     return proc;
 }
 
@@ -246,6 +262,15 @@ void ScannerController::startProcess(const QString &key)
                 QStringList pidStrs;
                 QSet<qint64> pgids;
                 QStringList details;
+                // For each candidate external PID we gather a concise diagnostic snapshot:
+                // 1) Verify PID is positive.
+                // 2) alive flag via kill(pid,0) (1 means still exists).
+                // 3) Query its process group (pgid) so we can reason about group kills later.
+                // 4) Fetch trimmed command line (ps -o args=) to confirm it actually matches the
+                //    executable we care about (this was already pre-filtered, but we show it for the user).
+                // 5) Truncate overly long command lines for message box readability.
+                // The resulting string list is used purely for rich error reporting when we refuse to
+                // start because an external instance is still present; we are NOT killing here.
                 for (qint64 pid : pids)
                 {
                     if (pid <= 0)
@@ -352,7 +377,8 @@ void ScannerController::readDriverOutput()
     // qDebug().noquote() << text;
     if (key == "mapviz" && !text.trimmed().isEmpty())
     {
-        QStringList lines = text.split('\n', Qt::SkipEmptyParts);
+        // Use QString::SkipEmptyParts for broader Qt version compatibility (older Qt versions don't have Qt::SkipEmptyParts)
+        QStringList lines = text.split('\n', QString::SkipEmptyParts);
         for (const QString &l : lines)
         {
             qDebug().noquote() << "[mapviz][stdout] " << l;
@@ -425,6 +451,13 @@ void ScannerController::handleProcessCrash(const QString &crashedProc)
         qDebug() << "Critical process" << crashedProc << "crashed, stopping all drivers";
         stopDrivers();
     }
+
+    // Auto-restart logic (only for non-critical processes)
+    if (config && !config->critical && shouldAutoRestart(crashedProc))
+    {
+        int attempt = ++restartAttempts_[crashedProc];
+        scheduleRestart(crashedProc, QStringLiteral("crash"), attempt);
+    }
 }
 
 void ScannerController::handleProcessCompletion(const QString &completedProc)
@@ -432,6 +465,12 @@ void ScannerController::handleProcessCompletion(const QString &completedProc)
     if (completedProc == "mapviz")
     {
         qDebug() << "[mapviz] handleProcessCompletion";
+    }
+    qint64 uptimeMs = -1;
+    auto tsIt = startTimestamps_.find(completedProc);
+    if (tsIt != startTimestamps_.end())
+    {
+        uptimeMs = QDateTime::currentMSecsSinceEpoch() - tsIt->second;
     }
     shutdownProcess(completedProc);
     emit driverStopped(completedProc);
@@ -441,6 +480,23 @@ void ScannerController::handleProcessCompletion(const QString &completedProc)
     {
         stopSlam();
     }
+
+    // Decide if we should restart (short-lived normal exit treated as failure)
+    const ProcessConfig *config = ProcessRegistry::instance().getProcess(completedProc);
+    if (config && !config->critical && shouldAutoRestart(completedProc))
+    {
+        // If process exited very quickly (< stable uptime), attempt restart
+        if (uptimeMs >= 0 && uptimeMs < kStableUptimeMs)
+        {
+            int attempt = ++restartAttempts_[completedProc];
+            scheduleRestart(completedProc, QStringLiteral("early-exit (%1 ms)").arg(uptimeMs), attempt);
+            return;
+        }
+    }
+
+    // Stable completion (clear attempts tracking)
+    restartAttempts_.erase(completedProc);
+    startTimestamps_.erase(completedProc);
 }
 
 QString ScannerController::findVictimKey(QProcess *proc)
@@ -500,6 +556,53 @@ bool ScannerController::killProcessGroup(qint64 pid, int sig, int waitMs)
         QThread::msleep(50);
     }
     return false;
+}
+
+bool ScannerController::shouldAutoRestart(const QString &key) const
+{
+    // Policy: don't auto-restart roscore (leave adoption/cleanup logic), otherwise allow for all known processes including mapviz.
+    if (key == "roscore")
+        return false;
+    // Respect max attempts
+    auto it = restartAttempts_.find(key);
+    if (it != restartAttempts_.end() && it->second >= kMaxRestartAttempts)
+        return false;
+    return true;
+}
+
+void ScannerController::scheduleRestart(const QString &key, const QString &reason, int attempt)
+{
+    if (attempt > kMaxRestartAttempts)
+        return;                                // safety guard
+    int delay = kBaseRestartDelayMs * attempt; // simple linear backoff
+    qDebug() << "[restart] scheduling restart for" << key << "attempt" << attempt << "in" << delay << "ms reason=" << reason;
+    quint64 epochAtSchedule = restartEpoch_;
+    QTimer::singleShot(delay, this, [this, key, epochAtSchedule]()
+                       {
+        if (epochAtSchedule != restartEpoch_) {
+            qDebug() << "[restart] epoch changed; aborting scheduled restart for" << key;
+            return; // stopDrivers() called meanwhile
+        }
+
+        // Ensure not already running (might have been started manually in the meantime)
+        if (drivers_.count(key))
+            return;
+
+        if (!canStart(key))
+        {
+            qDebug() << "[restart] prerequisites still not met for" << key << "- deferring attempt";
+            // Requeue with small delay without increasing attempt count (prereq wait)
+            QTimer::singleShot(500, this, [this, key, epochAtSchedule]() {
+                if (epochAtSchedule != restartEpoch_) {
+                    qDebug() << "[restart] epoch changed; aborting deferred restart for" << key;
+                    return;
+                }
+                scheduleRestart(key, QStringLiteral("waiting-prereqs"), restartAttempts_[key]);
+            });
+            return;
+        }
+
+        startProcess(key); });
 }
 
 void ScannerController::dumpDriversSnapshot()
