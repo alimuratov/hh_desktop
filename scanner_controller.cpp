@@ -64,6 +64,8 @@ bool ScannerController::isRecording() const
 
 void ScannerController::startDrivers()
 {
+    if (diagnosticsMonitor)
+        diagnosticsMonitor->resume(); // begin a fresh diagnostics session
     if (forceExternalCleanup_)
     {
         qDebug() << "Force external cleanup enabled. Attempting to terminate externally running processes before startup.";
@@ -100,6 +102,8 @@ void ScannerController::startDrivers()
 
 void ScannerController::stopDrivers()
 {
+    if (diagnosticsMonitor)
+        diagnosticsMonitor->pause(); // stop accepting + clear cache
     // Invalidate any pending scheduled restarts and clear tracking at the end.
     ++restartEpoch_;
     qDebug() << "Stopping all drivers; invalidate restart timers epoch=" << restartEpoch_;
@@ -122,8 +126,6 @@ void ScannerController::stopDrivers()
     qDebug() << "[shutdown] sequence complete";
     restartAttempts_.clear();
     startTimestamps_.clear();
-    // Reset diagnostics cache so next startup re-emits initial statuses even if level unchanged
-    resetDiagnosticsCache();
 }
 
 void ScannerController::resetDiagnosticsCache()
@@ -392,17 +394,13 @@ void ScannerController::readDriverOutput()
     const QString key = findVictimKey(senderProc);
     // emit driverOutput(key, text);
     // qDebug().noquote() << text;
-    if (!text.trimmed().isEmpty())
+    if (key == "mapviz" && !text.trimmed().isEmpty())
     {
-        // Selectively log stdout for key processes to aid diagnostics debugging.
-        if (key == "mapviz" || key == "watchdog" || key == "camera")
+        // Use QString::SkipEmptyParts for broader Qt version compatibility (older Qt versions don't have Qt::SkipEmptyParts)
+        QStringList lines = text.split('\n', QString::SkipEmptyParts);
+        for (const QString &l : lines)
         {
-            QString tag = key;
-            QStringList lines = text.split('\n', QString::SkipEmptyParts);
-            for (const QString &l : lines)
-            {
-                qDebug().noquote() << "[" << tag << "][stdout] " << l;
-            }
+            qDebug().noquote() << "[mapviz][stdout] " << l;
         }
     }
 }

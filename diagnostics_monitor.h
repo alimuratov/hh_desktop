@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <QDebug>
 #include <ros/ros.h>
 #include <diagnostic_msgs/DiagnosticArray.h>
 #include <unordered_map>
@@ -19,12 +20,25 @@ Q_OBJECT // gives the class its own signal - slot mechanism
     explicit DiagnosticsMonitor(ros::NodeHandle &nh, QObject *parent = nullptr)
     : QObject(parent)
     {
-        sub_ = nh.subscribe("/diagnostics", 10,
-                            &DiagnosticsMonitor::diagCb, this);
+        sub_ = nh.subscribe("/diagnostics", 10, &DiagnosticsMonitor::diagCb, this);
     }
 
     // Clears cached last levels so the next received diagnostic messages will emit again
     void resetCache() { last_level_.clear(); }
+    // Pause accepting diagnostics (used during shutdown so trailing messages don't
+    // repopulate cache before the next session)
+    void pause()
+    {
+        accepting_ = false;
+        last_level_.clear();
+    }
+    // Resume a new session: clear cached levels and accept fresh first messages
+    void resume()
+    {
+        last_level_.clear();
+        accepting_ = true;
+    }
+    bool isAccepting() const { return accepting_; }
 
 signals:
     // Emitted whenever the level of a watched task changes (0 = OK, 1 = WARN, 2 = ERROR, 3 = STALE).
@@ -33,6 +47,8 @@ signals:
 private:
     void diagCb(const diagnostic_msgs::DiagnosticArrayConstPtr &msg)
     {
+        if (!accepting_)
+            return; // ignore diagnostics while paused (shutdown window)
         for (const auto &status : msg->status)
         {
             const std::string &name = status.name;
@@ -47,6 +63,8 @@ private:
             int level = status.level;
 
             auto it = last_level_.find(name);
+            QString qname = QString::fromStdString(name);
+
             std::string frequency;
             for (const auto &kv : status.values)
             {
@@ -75,4 +93,5 @@ private:
 
     ros::Subscriber sub_;
     std::unordered_map<std::string, int> last_level_;
+    bool accepting_ = true; // gated across stop/start cycles
 };
