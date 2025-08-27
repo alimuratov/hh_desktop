@@ -583,7 +583,10 @@ void ScannerController::shutdownProcess(const QString &key)
     }
 
     drivers_.erase(it);
+
+    qDebug() << "[shutdown]" << key << ": emit driverStopped (source=shutdownProcess)";
     emit driverStopped(key);
+
     if (key == "mapviz")
     {
         qDebug() << "[mapviz] shutdownProcess end";

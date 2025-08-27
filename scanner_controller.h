@@ -51,9 +51,6 @@ public:
     void setExternalDetectionVerbose(bool enable) { verboseExternalDetect_ = enable; }
     bool externalDetectionVerbose() const { return verboseExternalDetect_; }
     void resetDiagnosticsCache();
-    // Control stdout/stderr logging to qDebug (does not affect signal emission)
-    void setProcessOutputLoggingEnabled(bool en) { processOutputLoggingEnabled_ = en; }
-    bool processOutputLoggingEnabled() const { return processOutputLoggingEnabled_; }
 
 signals:
     void recordingStarted();
@@ -97,7 +94,6 @@ private:
     bool forceExternalCleanup_ = true;   // if true, startDrivers() will attempt to stop externally running matching processes first
     bool adoptExternalRoscore_ = true;   // treat an already-running roscore as acceptable and 'adopt' it instead of erroring
     bool verboseExternalDetect_ = false; // emit detailed logs for findExternalPids
-        bool processOutputLoggingEnabled_ = true; // if false, suppress per-line driver stdout qDebug logging
 
     // tuning constants
     static constexpr int kExternalRetryAttempts = 10; // total attempts after cleanup to verify external gone
