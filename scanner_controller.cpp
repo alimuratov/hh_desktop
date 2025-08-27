@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QProcess>
 #include <QTextStream>
+#include <QRegularExpression>
 #include <errno.h>
 #include <signal.h>
 
@@ -187,8 +188,10 @@ void ScannerController::startProcess(const QString &key)
     }
 
     // External instance handling
+    QList<qint64> initialExternalPids;
     if (hasExternalRunning(key))
     {
+        initialExternalPids = findExternalPids(key); // snapshot before retries / adoption
         if (key == "roscore" && adoptExternalRoscore_)
         {
             qDebug() << "Adopting external" << key;
@@ -208,47 +211,63 @@ void ScannerController::startProcess(const QString &key)
         if (!cleared && hasExternalRunning(key))
         {
             // Collect detailed PID / PGID and command line info for the message box
-            QList<qint64> extPids = findExternalPids(key);
-            QStringList pidStrs;
-            QSet<qint64> pgidSet;
-            QStringList procDetails; // pid:{pg=XYZ cmd=...}
-            for (qint64 pid : extPids)
-            {
-                pidStrs << QString::number(pid);
-                pid_t pg = getpgid(static_cast<pid_t>(pid));
-                if (pg > 0)
-                    pgidSet.insert(pg);
+            QList<qint64> finalPids = findExternalPids(key); // refresh after waits
 
-                // Grab command line
-                QString infoCmd = QString("ps -o args= -p %1 2>/dev/null").arg(pid);
-                QProcess ps;
-                ps.start("/bin/sh", QStringList() << "-c" << infoCmd);
-                QString cmdLine;
-                if (ps.waitForFinished(400))
+            // Build sets / details
+            auto buildDetails = [](const QList<qint64> &pids)
+            {
+                QStringList pidStrs;
+                QSet<qint64> pgids;
+                QStringList details;
+                for (qint64 pid : pids)
                 {
-                    cmdLine = QString::fromUtf8(ps.readAllStandardOutput()).trimmed();
-                }
-                if (cmdLine.isEmpty())
-                    cmdLine = "<unknown>";
-                const int kMaxCmd = 80;
-                if (cmdLine.size() > kMaxCmd)
-                    cmdLine = cmdLine.left(kMaxCmd) + QStringLiteral("...");
-                procDetails << QString("%1:{pg=%2 cmd=%3}")
+                    if (pid <= 0)
+                        continue;
+                    bool alive = (::kill(pid, 0) == 0);
+                    pidStrs << QString::number(pid);
+                    pid_t pg = getpgid(static_cast<pid_t>(pid));
+                    if (pg > 0)
+                        pgids.insert(pg);
+                    QString infoCmd = QString("ps -o args= -p %1 2>/dev/null").arg(pid);
+                    QProcess ps;
+                    ps.start("/bin/sh", QStringList() << "-c" << infoCmd);
+                    QString cmdLine;
+                    if (ps.waitForFinished(300))
+                        cmdLine = QString::fromUtf8(ps.readAllStandardOutput()).trimmed();
+                    if (cmdLine.isEmpty())
+                        cmdLine = "<unknown>";
+                    const int kMaxCmd = 80;
+                    if (cmdLine.size() > kMaxCmd)
+                        cmdLine = cmdLine.left(kMaxCmd) + "...";
+                    details << QString("%1:{alive=%2 pg=%3 cmd=%4}")
                                    .arg(pid)
+                                   .arg(alive ? "1" : "0")
                                    .arg(pg > 0 ? QString::number(pg) : QStringLiteral("?"))
                                    .arg(cmdLine.replace('\n', ' '));
-            }
-            QStringList pgidStrs;
-            for (qint64 pg : pgidSet)
-            {
-                pgidStrs << QString::number(pg);
-            }
-            emit driverError(key, QString("%1 already running externally. PIDs=[%2] PGIDs=[%3] EXEC=%4 DETAILS={%5}")
+                }
+                return std::tuple<QStringList, QSet<qint64>, QStringList>(pidStrs, pgids, details);
+            };
+
+            auto [initialPidStrs, initialPgids, initialDetails] = buildDetails(initialExternalPids);
+            auto [finalPidStrs, finalPgids, finalDetails] = buildDetails(finalPids);
+
+            QStringList initialPgidStrs;
+            for (qint64 g : initialPgids)
+                initialPgidStrs << QString::number(g);
+            QStringList finalPgidStrs;
+            for (qint64 g : finalPgids)
+                finalPgidStrs << QString::number(g);
+
+            emit driverError(key, QString(
+                                      "%1 already running externally. INITIAL{PIDs=[%2] PGIDs=[%3] DETAILS={%4}} FINAL{PIDs=[%5] PGIDs=[%6] DETAILS={%7}} EXEC=%8")
                                       .arg(config->name,
-                                           pidStrs.join(","),
-                                           pgidStrs.join(","),
-                                           config->executable,
-                                           procDetails.join(", ")));
+                                           initialPidStrs.join(","),
+                                           initialPgidStrs.join(","),
+                                           initialDetails.join(" | "),
+                                           finalPidStrs.join(","),
+                                           finalPgidStrs.join(","),
+                                           finalDetails.join(" | "),
+                                           config->executable));
             return;
         }
     }
@@ -473,20 +492,19 @@ QList<qint64> ScannerController::findExternalPids(const QString &key) const
     }
 
     QProcess pgrep;
-    // Use a more restrictive pattern: full executable path anchored at start if absolute
-    QString pattern = config->executable;
-    if (pattern.startsWith('/'))
-    {
-        // Anchor: ^/full/path( |$)
-        pattern = QString("^%1( |$)").arg(QRegExp::escape(pattern));
-        // pgrep -f doesn't support full regex anchors consistently; fallback to grep filter below if needed
-    }
-    const QString cmd = QString("pgrep -f %1").arg(config->executable); // keep original for portability
-    pgrep.start("/bin/sh", QStringList() << "-c" << cmd);
+    // Collect broad candidates first
+    QString baseExec = config->executable;
+    QString candidateCmd = QString("pgrep -f %1").arg(baseExec);
+    pgrep.start("/bin/sh", QStringList() << "-c" << candidateCmd);
     if (!pgrep.waitForFinished(1000))
         return result;
-    const QByteArray out = pgrep.readAllStandardOutput();
-    const QList<QByteArray> lines = out.split('\n');
+    const QList<QByteArray> lines = pgrep.readAllStandardOutput().split('\n');
+
+    // Prepare stricter match regex: start-of-line optional exec path, we verify with ps output
+    QString escaped = QRegularExpression::escape(baseExec);
+    QRegularExpression strictRe(QStringLiteral("(^| )%1( |$)"), QRegularExpression::CaseInsensitiveOption);
+    // (Using captured escaped inside each per-process ps inspection instead of constructing complex pattern here.)
+
     for (const QByteArray &line : lines)
     {
         bool ok = false;
@@ -494,6 +512,18 @@ QList<qint64> ScannerController::findExternalPids(const QString &key) const
         if (!ok || pid <= 0)
             continue;
         if (ownedPids.contains(pid))
+            continue; // skip internally managed
+        // Validate by inspecting command line
+        QString infoCmd = QString("ps -o args= -p %1 2>/dev/null").arg(pid);
+        QProcess ps;
+        ps.start("/bin/sh", QStringList() << "-c" << infoCmd);
+        if (!ps.waitForFinished(300))
+            continue; // skip if can't read
+        QString cmdLine = QString::fromUtf8(ps.readAllStandardOutput()).trimmed();
+        if (cmdLine.isEmpty())
+            continue;
+        // Heuristic: require the executable token to appear at start or after a space boundary
+        if (!cmdLine.startsWith(baseExec) && !cmdLine.contains(QString(" ") + baseExec))
             continue;
         result.append(pid);
     }
