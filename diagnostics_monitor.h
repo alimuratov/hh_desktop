@@ -1,0 +1,97 @@
+#pragma once
+#include <QObject>
+#include <QString>
+#include <QDebug>
+#include <ros/ros.h>
+#include <diagnostic_msgs/DiagnosticArray.h>
+#include <unordered_map>
+#include <string>
+#include "config.h"
+
+// inheriting from QObject allows us to pass a parent pointer in the constructor
+// ensuring that the monitor is destroyed automatically when the window closes
+class DiagnosticsMonitor : public QObject
+{
+Q_OBJECT // gives the class its own signal - slot mechanism
+    public :
+    // The ctor takes an already‑initialised ROS node‑handle and begins the
+    // subscription.  The object lives entirely in the Qt (GUI) thread: callbacks
+    // are delivered there because we use ros::AsyncSpinner(1) elsewhere.
+    explicit DiagnosticsMonitor(ros::NodeHandle &nh, QObject *parent = nullptr)
+    : QObject(parent)
+    {
+        sub_ = nh.subscribe("/diagnostics", 10, &DiagnosticsMonitor::diagCb, this);
+    }
+
+    // Clears cached last levels so the next received diagnostic messages will emit again
+    void resetCache() { last_level_.clear(); }
+    // Pause accepting diagnostics (used during shutdown so trailing messages don't
+    // repopulate cache before the next session)
+    void pause()
+    {
+        accepting_ = false;
+        last_level_.clear();
+    }
+    // Resume a new session: clear cached levels and accept fresh first messages
+    void resume()
+    {
+        last_level_.clear();
+        accepting_ = true;
+    }
+    bool isAccepting() const { return accepting_; }
+
+signals:
+    // Emitted whenever the level of a watched task changes (0 = OK, 1 = WARN, 2 = ERROR, 3 = STALE).
+    void statusChanged(QString taskName, int level, QString message, QString recordedFrequency);
+
+private:
+    void diagCb(const diagnostic_msgs::DiagnosticArrayConstPtr &msg)
+    {
+        if (!accepting_)
+            return; // ignore diagnostics while paused (shutdown window)
+        for (const auto &status : msg->status)
+        {
+            const std::string &name = status.name;
+            if (name != "river_watchdog: camera_rate" &&
+                name != "river_watchdog: lidar_rate" &&
+                name != "river_watchdog: gps_rate" &&
+                name != "river_watchdog: Offset Accuracy")
+            {
+                continue; // we only care about these three tasks
+            }
+
+            int level = status.level;
+
+            auto it = last_level_.find(name);
+            QString qname = QString::fromStdString(name);
+
+            std::string frequency;
+            for (const auto &kv : status.values)
+            {
+                if (kv.key == "Actual frequency (Hz)")
+                {
+                    frequency = kv.value;
+                    break;
+                }
+            }
+            if (it == last_level_.end() || it->second != level)
+            {
+                qDebug() << "[diag] emitting statusChanged for" << qname
+                         << "level" << level
+                         << "(was" << (it != last_level_.end() ? QString::number(it->second) : "unset") << ")";
+                last_level_[name] = level;
+                emit statusChanged(QString::fromStdString(name), level,
+                                   QString::fromStdString(status.message),
+                                   QString::fromStdString(frequency));
+            }
+            else
+            {
+                qDebug() << "[diag] suppressing duplicate for" << qname << "level" << level;
+            }
+        }
+    }
+
+    ros::Subscriber sub_;
+    std::unordered_map<std::string, int> last_level_;
+    bool accepting_ = true; // gated across stop/start cycles
+};

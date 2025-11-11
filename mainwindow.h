@@ -4,10 +4,26 @@
 #include <QMainWindow>
 #include <QPushButton>
 #include <QDebug>
-#include <QProcess>
-#include <QTimer>
 #include <QString>
 #include <QMessageBox>
+#include <memory>
+#include <QDateTime>
+#include <QThread>
+#include <csignal>
+#include <unordered_map>
+#include <QString>
+#include <QStringList>
+#include <QtGlobal> 
+#include <QLabel>
+#include <QSet>
+#include <QCloseEvent>
+#include <QTimer>
+#include "scanner_controller.h"
+#include "diagnostics_monitor.h"
+#include "rosbagrecorder.h"
+#ifdef HH_ENABLE_RVIZ
+#include "rvizwidget.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -19,14 +35,44 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+protected:
+    void closeEvent(QCloseEvent* event) override; 
+private slots:
+    // UI buttons
     void startDrivers();
-    void readDriverOutput();
-    void pollDrivers();
-    void driverCrashed(); 
+    void stopDrivers();
+    void startSlam();
+    void stopSlam();
+    void startDynamicReconfigure();
+    void stopDynamicReconfigure();
+    void startMapviz();
+    void stopMapviz();
+
+    //driver feedback
+    void onDriverStarted(const QString& key);
+    void onDriverStopped(const QString& key);
+    void onDriverCrashed(const QString& key);
+    void onDriverOutput(const QString& key, const QString& output);
+
+    void onDiagStatus(const QString&, int, const QString&, const QString&);
+
+    void onRecordingStarted();
+    void onRecordingStopped();
+    void on_cameraCheckbox_stateChanged(int checked);
+    void on_lidarCheckbox_stateChanged(int checked);
+    void showNextPage();
+    void showPrevPage();
 private:
     Ui::MainWindow *ui;
-    QProcess* driverProcess{nullptr};
-    QTimer pollTimer; 
-    QString lastStatus{"INIT"};
+    void setupUiActions();
+    void setupControllerSignals();
+    void updateUiState();
+
+#ifdef HH_ENABLE_RVIZ
+      std::unique_ptr<RvizWidget> rviz_widget_;
+#endif
+    std::unique_ptr<ScannerController> scanner_;
+    QSet<QString> recordTopics_;
+    QTimer* uiRefreshTimer_ = nullptr;
 };
 #endif // MAINWINDOW_H
